@@ -61,7 +61,12 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF", "PL"]
-ignore = ["PLR0913", "PLR2004"]
+ignore = [
+    "PLR0913",   # too many args allowed; services proxy many filters
+    "PLR2004",   # "magic numbers" common in test/URL constants
+    "SIM108",    # explicit if/else often clearer than ternary in multi-branch
+    "PLC0415",   # lazy imports break circular deps on service registry
+]
 
 [tool.mypy]
 python_version = "3.11"

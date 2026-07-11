@@ -36,7 +36,18 @@ print(client.access_token)
 
 # Read-only example
 types = client.document_types.list()
-doc = client.documents.get_details(uuid="...")
+details = client.documents.get_details(uuid="...")
+recent = client.documents.get_recent_documents(page_size=50)
+results = client.documents.search_documents(
+    submission_date_from="2024-01-01T00:00:00Z",
+    submission_date_to="2024-01-31T00:00:00Z",
+)
+
+# Validate a Tax Identification Number before issuing an invoice
+ok = client.taxpayer.validate_tin(tin="C2584563222", id_type="BRN", id_value="202001234567")
+
+# Intermediary / ERP systems submitting on behalf of a taxpayer:
+client.login(on_behalf_of="C1234567890")
 
 # (coming soon) build + sign + submit an invoice
 ```
@@ -44,6 +55,24 @@ doc = client.documents.get_details(uuid="...")
 ## Roadmap
 
 See [AGENTS.md](./AGENTS.md) for the full phased roadmap.
+
+### Done
+
+- **Phase 0** — project scaffold (`uv`, `pyproject`, ruff, mypy strict, pytest).
+- **Phase 1** — sync `MyInvoisClient`: OAuth2 (`client_credentials`) token
+  manager with in-memory cache + proactive refresh; `onbehalfof` intermediary
+  header; typed error hierarchy mapped to HTTP status codes; QR URL helper.
+- **Phase 2** — read-only services: `document_types` (list/get/version),
+  `documents` (raw/details/recent/search with the LHDN date-pair invariant
+  enforced in the request model), `notifications`, `taxpayer`
+  (validate_tin/search_tin/get_from_qrcode).
+
+### TODO
+
+- **Phase 3** — UBL 2.1 document models + JSON/XML serializers + code tables.
+- **Phase 4** — XAdES digital signing (the hardest part).
+- **Phase 5** — submit + document state (cancel/reject) services.
+- **Phase 6** — async mirror (`AsyncMyInvoisClient`), docs, publish to PyPI.
 
 ## Disclaimer
 

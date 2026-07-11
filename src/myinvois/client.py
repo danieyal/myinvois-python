@@ -19,7 +19,7 @@ The async twin lives in ``myinvois._async_client``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -31,6 +31,12 @@ from myinvois.config import (
     base_portal_url,
 )
 from myinvois.exceptions import error_for_status
+
+if TYPE_CHECKING:
+    from myinvois.services.document_types import DocumentTypesService
+    from myinvois.services.documents import DocumentsService
+    from myinvois.services.notifications import NotificationsService
+    from myinvois.services.taxpayer import TaxpayerService
 
 __all__ = ["MyInvoisClient"]
 
@@ -84,6 +90,10 @@ class MyInvoisClient:
         self._base_api_url = base_api_url(environment)
         self._base_portal_url = base_portal_url(environment)
         self._on_behalf_of: str | None = None
+        self._document_types: DocumentTypesService | None = None
+        self._documents: DocumentsService | None = None
+        self._taxpayer: TaxpayerService | None = None
+        self._notifications: NotificationsService | None = None
         self._token_manager = TokenManager(
             client_id=client_id,
             client_secret=client_secret,
@@ -140,6 +150,41 @@ class MyInvoisClient:
     @property
     def on_behalf_of(self) -> str | None:
         return self._on_behalf_of
+
+    # ----- service accessors --------------------------------------------
+
+    @property
+    def document_types(self) -> DocumentTypesService:
+        # Lazy import to avoid a circular dependency at import time.
+        from myinvois.services.document_types import DocumentTypesService
+
+        if self._document_types is None:
+            self._document_types = DocumentTypesService(self)
+        return self._document_types
+
+    @property
+    def documents(self) -> DocumentsService:
+        from myinvois.services.documents import DocumentsService
+
+        if self._documents is None:
+            self._documents = DocumentsService(self)
+        return self._documents
+
+    @property
+    def taxpayer(self) -> TaxpayerService:
+        from myinvois.services.taxpayer import TaxpayerService
+
+        if self._taxpayer is None:
+            self._taxpayer = TaxpayerService(self)
+        return self._taxpayer
+
+    @property
+    def notifications(self) -> NotificationsService:
+        from myinvois.services.notifications import NotificationsService
+
+        if self._notifications is None:
+            self._notifications = NotificationsService(self)
+        return self._notifications
 
     # ----- HTTP ----------------------------------------------------------
 

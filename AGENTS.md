@@ -97,9 +97,9 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 
 ## Progress
 - [x] Phase 0: scaffold
-- [ ] Phase 1: client + auth
-- [ ] Phase 2: read services
-- [ ] Phase 3: UBL models + serializers
+- [x] Phase 1: client + auth
+- [x] Phase 2: read services (document_types, documents raw/details/recent/search, notifications, taxpayer validate/search TIN + qrcodeinfo)
+- [ ] Phase 3: UBL models + serializers + codes
 - [ ] Phase 4: digital signature
 - [ ] Phase 5: submit + state services
-- [ ] Phase 6: polish + publish
+- [ ] Phase 6: async mirror + polish + publish
