@@ -8,6 +8,7 @@ Filters: dateFrom, dateTo, type, language, status, pageNo, pageSize.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -20,7 +21,7 @@ from myinvois.services.notifications import NotificationsService, NotificationSt
 
 
 @pytest.fixture
-def client(respx_mock: Any) -> MyInvoisClient:
+def client(respx_mock: Any) -> Iterator[MyInvoisClient]:
     respx_mock.post(base_identity_url(Environment.SANDBOX)).mock(
         return_value=httpx.Response(200, json={"access_token": "TOK", "expires_in": 3600})
     )
@@ -30,9 +31,9 @@ def client(respx_mock: Any) -> MyInvoisClient:
 
 
 def test_notification_status_enum() -> None:
-    assert NotificationStatus.PENDING == "pending"
-    assert NotificationStatus.DELIVERED == "delivered"
-    assert NotificationStatus.ERROR == "error"
+    assert NotificationStatus.PENDING.value == "pending"
+    assert NotificationStatus.DELIVERED.value == "delivered"
+    assert NotificationStatus.ERROR.value == "error"
 
 
 def test_get_notifications_passes_filters(client: MyInvoisClient, respx_mock: Any) -> None:

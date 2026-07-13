@@ -8,6 +8,7 @@ to typed exceptions.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -25,7 +26,7 @@ def _token(access_token: str = "TOK", expires_in: int = 3600) -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(respx_mock: Any) -> MyInvoisClient:
+def client(respx_mock: Any) -> Iterator[MyInvoisClient]:
     # The `/connect/token` route must always exist for any auth attempt.
     respx_mock.post(base_identity_url(Environment.SANDBOX)).mock(
         return_value=httpx.Response(200, json=_token())

@@ -99,7 +99,34 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 0: scaffold
 - [x] Phase 1: client + auth
 - [x] Phase 2: read services (document_types, documents raw/details/recent/search, notifications, taxpayer validate/search TIN + qrcodeinfo)
-- [ ] Phase 3: UBL models + serializers + codes
+- [x] Phase 3a: code tables (StrEnum + JSON-backed loaders for states/taxes/payment_means/document_types/currency/classification/country/MSIC/units; py.typed PEP 561 marker; uv build ships `_data/*.json`)
+- [ ] Phase 3b: UBL document models (Invoice-first)
+- [ ] Phase 3c: UBL JSON + XML serializers
+- [ ] Phase 4: digital signature
+- [ ] Phase 5: submit + state services
+- [ ] Phase 6: async mirror + polish + publish
+
+## CURRENT_STATE
+Phase 0/1/2 + Phase 3a done and committed (commit `eafb615`). 103 tests passing. `ruff` + `mypy src` + `mypy tests` all clean.
+
+## CODE_STATE
+- `src/myinvois/codes/__init__.py` NOW IMPLEMENTED. Design = `_CodeTable` loader instances (caching rows + index) + curated `StrEnum(_EnumLookupMixin)` tables (`MalaysianState`, `TaxType`, `PaymentMethod`, `DocumentTypeCode`[`.is_self_billed`/`.coerce`], `Currency`) + lookup-only singletons (`ClassificationCode`, `Country`, `MSIC`, `UnitCode`). `msic_category_for()` helper. Enums get lookup classmethods from a module-level `_ENUM_LOADERS` registry (because enum class bodies forbid post-creation setattr and treat bare string assignments as members).
+- `src/myinvois/codes/_data/*.json`: 8 tables = 3,637 rows. states(17) taxes(6) payment_means(8) classification(45) countries(253) currencies(180) msic(1174) units(1834).
+- `scripts/extract_codes.py`: regex extractor with `php_consts()` resolution (`CurrencyCodes::CODE` => `CurrencyCodes::MYR`) and per-code dedup (`UnitCodes` `KGM` dups removed). Re-run with `uv run python scripts/extract_codes.py`.
+
+## TESTS
+103 passing (was 80). New `tests/unit/test_codes.py` has 23 tests. Test fixtures annotated `Iterator[...]`; StrEnum equality assertions use `.value` to satisfy strict mypy (comparison-overlap otherwise).
+
+## VERSION_CONTROL_STATUS
+Phase 3a commit = `eafb615` on `master` (note: branch is `master` not `main`). 33 files tracked. Working tree clean.
+
+## CHANGES
+- `pyproject.toml` now has `[tool.uv.build-backend]` `data-includes` shipping `py.typed` + `_data/*.json` (verified via fresh-venv `importlib.resources` runtime import). PEP 561 `py.typed` marker added.
+- Codes symbols re-exported from top-level `myinvois/__init__.py`.
+
+## PENDING
+- [ ] Phase 3b: UBL document models (Invoice-first)
+- [ ] Phase 3c: UBL JSON + XML serializers
 - [ ] Phase 4: digital signature
 - [ ] Phase 5: submit + state services
 - [ ] Phase 6: async mirror + polish + publish

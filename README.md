@@ -52,6 +52,23 @@ client.login(on_behalf_of="C1234567890")
 # (coming soon) build + sign + submit an invoice
 ```
 
+### Code tables
+
+The library bundles the LHDN enumerated lists (3,637 rows total):
+
+```python
+from myinvois.codes import (
+    MalaysianState, TaxType, PaymentMethod, DocumentTypeCode, Currency,
+    ClassificationCode, Country, MSIC, UnitCode,
+)
+
+TaxType.description_for("02")                       # -> "Service Tax"
+DocumentTypeCode.SELF_BILLED_INVOICE.is_self_billed # -> True
+DocumentTypeCode.coerce("03")                       # -> DEBIT_NOTE
+Country.name_for("MYS")                             # -> "MALAYSIA"
+MSIC.row_for("01111")["description"]               # -> "Growing of maize"
+```
+
 ## Roadmap
 
 See [AGENTS.md](./AGENTS.md) for the full phased roadmap.
@@ -66,10 +83,14 @@ See [AGENTS.md](./AGENTS.md) for the full phased roadmap.
   `documents` (raw/details/recent/search with the LHDN date-pair invariant
   enforced in the request model), `notifications`, `taxpayer`
   (validate_tin/search_tin/get_from_qrcode).
+- **Phase 3a** — code tables (lazy JSON-backed loaders + curated StrEnums for
+  states/taxes/payment_means/document_types/currency/classification/country/
+  MSIC/units). 3,637 rows deduped & shipped as wheel data; PEP 561 `py.typed`.
 
 ### TODO
 
-- **Phase 3** — UBL 2.1 document models + JSON/XML serializers + code tables.
+- **Phase 3b** — UBL 2.1 document models (Invoice-first).
+- **Phase 3c** — JSON + XML serializers.
 - **Phase 4** — XAdES digital signing (the hardest part).
 - **Phase 5** — submit + document state (cancel/reject) services.
 - **Phase 6** — async mirror (`AsyncMyInvoisClient`), docs, publish to PyPI.

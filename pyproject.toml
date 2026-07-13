@@ -46,6 +46,15 @@ Issues = "https://github.com/your-org/myinvois/issues"
 requires = ["uv_build>=0.11.28,<0.12.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+# Ship the py.typed marker (for mypy/PEP 561) and the JSON code tables.
+# Without this, installed wheels would drop py.typed and _data/*.json, and
+# importlib.resources lookups in the codes module would fail at runtime.
+data-includes = [
+    "src/myinvois/py.typed",
+    "src/myinvois/codes/_data/*.json",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

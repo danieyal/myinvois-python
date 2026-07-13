@@ -15,6 +15,7 @@ callers cannot accidentally send an LHDN-rejecting 400.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -36,7 +37,7 @@ from myinvois.services.documents import (
 
 
 @pytest.fixture
-def client(respx_mock: Any) -> MyInvoisClient:
+def client(respx_mock: Any) -> Iterator[MyInvoisClient]:
     respx_mock.post(base_identity_url(Environment.SANDBOX)).mock(
         return_value=httpx.Response(200, json={"access_token": "TOK", "expires_in": 3600})
     )
@@ -49,10 +50,10 @@ def client(respx_mock: Any) -> MyInvoisClient:
 
 
 def test_enums_string_values() -> None:
-    assert DocumentDirection.SENT == "Sent"
-    assert DocumentDirection.RECEIVED == "Received"
-    assert DocumentStatus.VALID == "Valid"
-    assert DocumentStatus.CANCELLED == "Cancelled"
+    assert DocumentDirection.SENT.value == "Sent"
+    assert DocumentDirection.RECEIVED.value == "Received"
+    assert DocumentStatus.VALID.value == "Valid"
+    assert DocumentStatus.CANCELLED.value == "Cancelled"
 
 
 # -------- get_raw -------------------------------------------------------------

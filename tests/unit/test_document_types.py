@@ -8,6 +8,7 @@ Endpoints (verified against klsheng/myinvois-php-sdk DocumentTypeService):
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -25,7 +26,7 @@ from myinvois.services.document_types import (
 
 
 @pytest.fixture
-def client(respx_mock: Any) -> MyInvoisClient:
+def client(respx_mock: Any) -> Iterator[MyInvoisClient]:
     respx_mock.post(base_identity_url(Environment.SANDBOX)).mock(
         return_value=httpx.Response(200, json={"access_token": "TOK", "expires_in": 3600})
     )

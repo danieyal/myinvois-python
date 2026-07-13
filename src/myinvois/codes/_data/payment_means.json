@@ -1,0 +1,34 @@
+[
+  {
+    "code": "01",
+    "name": "Cash"
+  },
+  {
+    "code": "02",
+    "name": "Cheque"
+  },
+  {
+    "code": "03",
+    "name": "Bank Transfer"
+  },
+  {
+    "code": "04",
+    "name": "Credit Card"
+  },
+  {
+    "code": "05",
+    "name": "Debit Card"
+  },
+  {
+    "code": "06",
+    "name": "e-Wallet / Digital Wallet"
+  },
+  {
+    "code": "07",
+    "name": "Digital Bank"
+  },
+  {
+    "code": "08",
+    "name": "Others"
+  }
+]
