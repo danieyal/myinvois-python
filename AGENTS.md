@@ -100,8 +100,16 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 1: client + auth
 - [x] Phase 2: read services (document_types, documents raw/details/recent/search, notifications, taxpayer validate/search TIN + qrcodeinfo)
 - [x] Phase 3a: code tables (StrEnum + JSON-backed loaders for states/taxes/payment_means/document_types/currency/classification/country/MSIC/units; py.typed PEP 561 marker; uv build ships `_data/*.json`)
-- [ ] Phase 3b: UBL document models (Invoice-first)
-- [ ] Phase 3c: UBL JSON + XML serializers
+- [x] Phase 3b: UBL document models (Invoice-first) — see DESIGN DECISION notes above
+  - DESIGN DECISION: model the **canonical UBL 2.1 envelope** (the form LHDN's public API actually accepts), NOT the gateway-style snake_case wrapper (that is the `myinvois-gateway` repo's *own* intermediate shape — LHDN rejects it; the gateway translates it server-side).
+  - The envelope JSON = `{"_D": "urn:...Invoice-2", "_A": cacNS, "_B": cbcNS, "_E": extNS, "Invoice": [<nested UBL structure with every leaf as {"_": value, <attrs>...} and every repeatable element as an array-of-one-or-more>]}` (see `JsonDocumentBuilder::build()` in PHP SDK).
+  - Phase 3b scope = Pydantic domain models holding structured typed data + `validate()` semantics ported from PHP `IValidator::validate()` as `@model_validator`. Phase 3c emits the envelope from these models.
+  - Field naming: Python snake_case attrs with `serialization_alias = ExactUblElementName` (e.g. `id -> "ID"`, `issue_date -> "IssueDate"`, `invoice_type_code -> "InvoiceTypeCode"`). Pydantic `populate_by_name=True` + per-field alias so construction is idiomatic; serialization is byte-aligned to UBL.
+  - Money: `Decimal` everywhere (finance lib; no float arithmetic). Per-amount `currencyID` attribute defaults to the document's `DocumentCurrencyCode` in the Phase 3c serializer; Phase 3b exposes optional `_currency_id` only where the SDK declared explicit Attrs fields.
+  - Enums reused from `myinvois.codes`: `DocumentTypeCode` (invoice_type_code with `.coerce`), `Currency` (document_currency_code, tax_currency_code), `UnitCode` (line.invoiced_quantity unitCode), `TaxType` (tax_category.id), `Country` (country.identification_code), `MalaysianState` (address.country_subentity_code), `ClassificationCode` (item.commodity_classification item_classification_code), `MSIC` (party.industry_classification_code).
+  - Phase 3b ships the Invoice (doc type 01) mainstream path only: Invoice, AccountingParty, Party, PartyIdentification, PartyTaxScheme, LegalEntity, Contact, Address, AddressLine, Country, InvoiceLine, Item, CommodityClassification, Price, ItemPriceExtension, TaxTotal, TaxSubTotal, TaxCategory, TaxScheme, AllowanceCharge, LegalMonetaryTotal, PaymentMeans, PayeeFinancialAccount, PaymentTerms, AdditionalDocumentReference, InvoiceDocumentReference, BillingReference, OrderReference, InvoicePeriod, PrepaidPayment, Delivery, Shipment, TaxExchangeRate, Attachment, SettlementPeriod, FinancialInstitutionBranch. Deferred to later: CreditNote/DebitNote/RefundNote variants + SelfBilled variants (02/03/04/11/12/13/14), and UBLExtensions/Signature (Phase 4).
+  - Module layout: `src/myinvois/ubl/` → `__init__.py`, `address.py`, `party.py`, `line.py`, `tax.py`, `monetary.py`, `payment.py`, `reference.py`, `common.py`, `invoice.py` (top-level Invoice).
+- [ ] Phase 3c: UBL JSON + XML serializers (envelope builder + XML via lxml)
 - [ ] Phase 4: digital signature
 - [ ] Phase 5: submit + state services
 - [ ] Phase 6: async mirror + polish + publish
@@ -125,7 +133,7 @@ Phase 3a commit = `eafb615` on `master` (note: branch is `master` not `main`). 3
 - Codes symbols re-exported from top-level `myinvois/__init__.py`.
 
 ## PENDING
-- [ ] Phase 3b: UBL document models (Invoice-first)
+- [x] Phase 3b: UBL document models (Invoice-first)
 - [ ] Phase 3c: UBL JSON + XML serializers
 - [ ] Phase 4: digital signature
 - [ ] Phase 5: submit + state services

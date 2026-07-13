@@ -82,6 +82,12 @@ python_version = "3.11"
 strict = true
 warn_unused_ignores = true
 warn_redundant_casts = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_typed = false
+warn_required_dynamic_outputs = true
+warn_untyped_fields = true
 
 [[tool.mypy.overrides]]
 module = ["lxml.*"]
