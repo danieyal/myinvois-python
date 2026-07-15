@@ -112,8 +112,8 @@ class TaxSubTotal(_UblModel):
     # PHP SDK the per-amount Attributes default to MYR but the serializer is
     # responsible for stamping the right currencyID in Phase 3c. Phase 3b
     # exposes optional overrides here.
-    taxable_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
-    tax_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    taxable_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
+    tax_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
 
     @field_validator(
         "taxable_amount",
@@ -159,8 +159,8 @@ class TaxTotal(_UblModel):
         default_factory=list, serialization_alias="TaxSubtotal"
     )
     rounding_amount: Decimal | None = Field(default=None, serialization_alias="RoundingAmount")
-    tax_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
-    rounding_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    tax_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
+    rounding_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
 
     @field_validator("tax_amount", "rounding_amount", mode="before")
     @classmethod

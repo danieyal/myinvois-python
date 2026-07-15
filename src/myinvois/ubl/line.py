@@ -80,7 +80,7 @@ class Price(_UblModel):
     """`cac:Price` — unit price + optional base quantity."""
 
     price_amount: Decimal = Field(serialization_alias="PriceAmount")
-    price_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    price_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
     base_quantity: Decimal | None = Field(default=None, serialization_alias="BaseQuantity")
     base_quantity_unit_code: str | None = Field(default=None, exclude=True, repr=False)
     allowance_charge: AllowanceCharge | None = Field(
@@ -116,7 +116,7 @@ class ItemPriceExtension(_UblModel):
     """`cac:ItemPriceExtension` — line total extension amount."""
 
     amount: Decimal = Field(serialization_alias="Amount")
-    amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
 
     @field_validator("amount", mode="before")
     @classmethod
@@ -153,7 +153,7 @@ class InvoiceLine(_UblModel):
         description="UN/ECE Rec.20 unit code; defaults to 'C62' (unit).",
     )
     line_extension_amount: Decimal = Field(serialization_alias="LineExtensionAmount")
-    line_extension_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    line_extension_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
     allowance_charges: list[AllowanceCharge] = Field(
         default_factory=list, serialization_alias="AllowanceCharge"
     )

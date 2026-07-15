@@ -1,0 +1,272 @@
+"""PHP-canonical JSON envelope builder for the LHDN MyInvois wire form.
+
+The renderer is hand-rolled rather than slaved to Python's ``json.dumps``
+because the canonical LHDN form has two requirements that ``json.dumps``
+cannot satisfy:
+
+1. **Every keyed element inside the document content is wrapped as a
+   one-or-more-element JSON array.** This includes singletons (e.g.
+   ``"IssueDate": [{"_": "2024-06-14"}]``) and structural submodels
+   (e.g. ``"TaxTotal": [{...}]``). The PHP SDK serializes everything via
+   ``$arrays['X'][] = $items`` and the TypeScript ``myinvois-client`` types
+   it the same way (``UBLJsonText = UBLJsonValue<string>[]``).
+
+2. **Money renders as JSON *numbers* in PHP's float-printing style.**
+   ``Decimal("1460.50")`` -> ``1460.5``; ``Decimal("1500.00")`` -> ``1500``
+   (no `.0`); ``Decimal("0.30")`` -> ``0.3``. Python's ``repr(float)``
+   matches PHP's ``json_encode`` for the non-integer case but emits
+   ``1500.0`` for integer-valued floats while PHP emits ``1500``. The
+   ``_number.format_as_php_float_token`` helper handles this consistently.
+
+Output is byte-identical to the PHP SDK's ``JsonDocumentBuilder::build()``
+output modulo formatting whitespace (compact, no escapes, no slashes
+escapes — matches ``JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES``).
+Phase 4's signature digest operates on this exact string; do NOT edit any
+formatting choice without regenerating the LHDN canonical-form Golden test
+fixtures.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import Any
+
+from ._number import format_as_php_float_token
+from ._specs import ENVELOPE_DOCUMENT_TAGS, UBL_NAMESPACES
+
+__all__ = ["JsonEnvelopeBuilder"]
+
+
+class JsonEnvelopeBuilder:
+    """Build the canonical LHDN UBL JSON envelope for an :class:`~myinvois.ubl.Invoice`.
+
+    Usage::
+
+        builder = JsonEnvelopeBuilder(invoice)
+        s = builder.build_json()  # str, ready for POST /documents
+
+    The builder treats the invoice's ``model_dump(by_alias=True, exclude_none=True)``
+    output as the *idiomatic Python surface* (unwrapped dicts for leaf elements)
+    and transforms it into the canonical LHDN wire form at the boundary.
+    """
+
+    __slots__ = ("_invoice",)
+
+    def __init__(self, invoice: Any) -> None:
+        self._invoice = invoice
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def build_json(self) -> str:
+        """Return the canonical UBL JSON envelope as a compact Unicode string."""
+        content_url = self._document_tag()
+        content = self._content_dump()
+
+        # Stamp document currency onto every amount that did not override it.
+        self._stamp_currency(content, self._document_currency_code())
+
+        wrapped = self._wrap_array_form(content)
+
+        envelope: dict[str, Any] = {
+            "_D": content_url,
+            "_A": UBL_NAMESPACES["cac"],
+            "_B": UBL_NAMESPACES["cbc"],
+            "_E": UBL_NAMESPACES["ext"],
+            self._document_tag_name(): [wrapped],
+        }
+        return self._render(envelope)
+
+    # ------------------------------------------------------------------
+    # Document introspection
+    # ------------------------------------------------------------------
+
+    def _document_tag_name(self) -> str:
+        # PHP base class sets ``Invoice::$xmlTagName = 'Invoice'`` on top-level
+        # document classes. We accept any model with the same convention.
+        return getattr(self._invoice, "xml_tag_name", "Invoice")
+
+    def _document_tag(self) -> str:
+        name = self._document_tag_name()
+        url = ENVELOPE_DOCUMENT_TAGS.get(name)
+        if url is None:
+            # Fall back to the standard UBL pattern rather than hard-fail.
+            url = f"urn:oasis:names:specification:ubl:schema:xsd:{name}-2"
+        return url
+
+    def _document_currency_code(self) -> str:
+        v = getattr(self._invoice, "document_currency_code", None)
+        if v is None:
+            return "MYR"
+        # Allow StrEnum-with-value OR raw string.
+        value = getattr(v, "value", v)
+        return value if isinstance(value, str) else str(value)
+
+    def _content_dump(self) -> dict[str, Any]:
+        # `Invoice.model_dump(by_alias=True, exclude_none=True)` returns the
+        # per-class `_ser` dict already aligned to PHP keyspace — leaves are
+        # `{"_": value, attrs...}` dicts and repeatables are lists-of-dicts.
+        dump = self._invoice.model_dump(by_alias=True, exclude_none=True)
+        return dump if isinstance(dump, dict) else dict(dump)
+
+    # ------------------------------------------------------------------
+    # Currency stamping (mirrors PHP AbstractDocumentBuilder CURRENCY_ID injection)
+    # ------------------------------------------------------------------
+
+    # Every amount-bearing leaf-form dict we recognize by attribute name. If
+    # the leaf has no `currencyID` set, default it to the document currency.
+    # Mirrors PHP: tax_amount_attributes/paid_amount_attributes/etc. default
+    # the attribute to the documentCurrencyCode when the caller didn't set it.
+    _AMOUNT_LEAF_ATTR_FIELDS: tuple[str, ...] = (
+        "tax_amount",
+        "taxable_amount",
+        "per_unit_amount",
+        "base_unit_measure",
+        "rounding_amount",
+        "line_extension_amount",
+        "amount",
+        "price_amount",
+        "base_quantity",
+        "paid_amount",
+        "prepaid_amount",
+        "allowance_total_amount",
+        "charge_total_amount",
+        "payable_rounding_amount",
+        "payable_amount",
+        "tax_exclusive_amount",
+        "tax_inclusive_amount",
+    )
+
+    def _stamp_currency(self, node: Any, currency: str) -> None:
+        """Walk the dump tree and apply the document currency to amount leaves.
+
+        Mutates leaves of the form ``{"_": <number>, "currencyID": None}``
+        (or absent currencyID) in place. Skips leaves whose `currencyID` is
+        already set. Also touches the corresponding ``*_currency_id`` model
+        private attrs (not in the dump) — but since we operate purely on the
+        dump, we just patch the `currencyID` field of the leaf dict here.
+        """
+        if isinstance(node, dict):
+            if "_" in node and "currencyID" in node:
+                # Leaf with a `currencyID` attribute — apply the default if
+                # the caller didn't override.
+                if not node["currencyID"]:
+                    node["currencyID"] = currency
+                return
+            for v in node.values():
+                self._stamp_currency(v, currency)
+        elif isinstance(node, list):
+            for e in node:
+                self._stamp_currency(e, currency)
+
+    # ------------------------------------------------------------------
+    # Array-form wrapping (PHP ``$arrays['X'][] = ...`` semantics)
+    # ------------------------------------------------------------------
+
+    def _wrap_array_form(self, node: Any) -> Any:
+        """Recursively wrap all keyed elements as JSON arrays-of-one-or-more.
+
+        Contract:
+          * list nodes are kept as lists; each element recurses.
+          * structural dict nodes (no ``_`` key): each value is wrapped in
+            ``[value]`` and recurses into the (unwrapped) inner dict.
+          * leaf dicts (``"_"`` key present): returned unchanged — the
+            parent will wrap them.
+        """
+        if isinstance(node, list):
+            return [self._wrap_array_form(e) for e in node]
+        if isinstance(node, dict):
+            if "_" in node:
+                # Leaf — leave for parent to wrap.
+                return node
+            result: dict[str, Any] = {}
+            for k, v in node.items():
+                if isinstance(v, list):
+                    # Repeatable element: keep the list; recurse each element.
+                    result[k] = [self._wrap_array_form(e) for e in v]
+                elif isinstance(v, dict):
+                    if "_" in v:
+                        # Leaf — wrap as array-of-one.
+                        result[k] = [v]
+                    else:
+                        # Structural submodel — recurse then wrap.
+                        result[k] = [self._wrap_array_form(v)]
+                else:
+                    # Primitive — PHP always wraps in array; produce `[v]`.
+                    result[k] = [v]
+            return result
+        # Primitive at top-level (unexpected for content dump) — pass through.
+        return node
+
+    # ------------------------------------------------------------------
+    # JSON renderer (PHP-compatible compact serialiser)
+    # ------------------------------------------------------------------
+
+    def _render(self, node: Any) -> str:
+        # Use a sentinel-aware compact renderer: handles Decimal as a JSON
+        # number token via format_as_php_float_token, emits dicts/lists/strs/
+        # bools/None/int per Python json semantics (matches PHP for these),
+        # Unicode passthrough (ensure_ascii=False), and forwards slashes
+        # unescaped (`JSON_UNESCAPED_SLASHES`).
+        out: list[str] = []
+        self._serialize(node, out)
+        return "".join(out)
+
+    def _serialize(self, node: Any, out: list[str]) -> None:  # noqa: PLR0911
+        # Dispatch by Python type so this stays a linear sequence, not a
+        # nested if/elif chain (ruff keeps the branch count bounded).
+        if node is None:
+            out.append("null")
+            return
+        if isinstance(node, bool):
+            out.append("true" if node else "false")
+            return
+        if isinstance(node, str):
+            out.append(self._render_string(node))
+            return
+        if isinstance(node, Decimal):
+            out.append(format_as_php_float_token(node))
+            return
+        if isinstance(node, float):
+            s = repr(node)
+            out.append(s[:-2] if s.endswith(".0") else s)
+            return
+        if isinstance(node, int):  # after Decimal/float to avoid bool/int overlap
+            out.append(str(node))
+            return
+        if isinstance(node, dict):
+            out.append("{")
+            for i, (k, v) in enumerate(node.items()):
+                if i:
+                    out.append(",")
+                out.append(self._render_string(k))
+                out.append(":")
+                self._serialize(v, out)
+            out.append("}")
+            return
+        if isinstance(node, (list, tuple)):
+            out.append("[")
+            for i, e in enumerate(node):
+                if i:
+                    out.append(",")
+                self._serialize(e, out)
+            out.append("]")
+            return
+        raise TypeError(
+            f"unsupported JSON node type: {type(node)!r}"
+        )  # pragma: no cover - defensive
+
+    # Cache for JSON string escapes. PHP JSON_UNESCAPED_UNICODE means non-ASCII
+    # characters are emitted literally (Python matches via ensure_ascii=False).
+    # JSON_UNESCAPED_SLASHES means forward slashes are NOT escaped (Python
+    # doesn't escape them by default either). The only required escapes are
+    # the JSON-grammar-mandatory ones.
+    @staticmethod
+    def _render_string(s: str) -> str:
+        # Use json.dumps with ensure_ascii=False for the canonical escape set
+        # (quotes, backslashes, control chars). json.dumps does NOT escape
+        # forward slashes by default in Python (matches JSON_UNESCAPED_SLASHES).
+        import json
+
+        return json.dumps(s, ensure_ascii=False)

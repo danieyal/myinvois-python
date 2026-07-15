@@ -10,7 +10,7 @@ builder to wrap.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import Field, field_validator, model_serializer, model_validator
 
@@ -41,6 +41,11 @@ class Invoice(_UblModel):
     * `accounting_supplier_party`, `accounting_customer_party`.
     * `legal_monetary_total`, `tax_total`, `invoice_lines >= 1`.
     """
+
+    # Canonical UBL XML tag name (matches PHP ``Invoice::$xmlTagName`` and the
+    # ``_D`` namespace URI used in the JSON envelope). Phase 3c's
+    # ``JsonEnvelopeBuilder`` reads this to set the outer key + default-namespace URL.
+    xml_tag_name: ClassVar[str] = "Invoice"
 
     id: str = Field(serialization_alias="ID")
     issue_date_time: datetime = Field(serialization_alias="IssueDateTime")

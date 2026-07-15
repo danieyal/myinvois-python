@@ -103,7 +103,7 @@ class PaymentTerms(_UblModel):
         default=None, serialization_alias="SettlementDiscountPercent"
     )
     amount: Decimal | None = Field(default=None, serialization_alias="Amount")
-    amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
     settlement_period: SettlementPeriod | None = Field(
         default=None, serialization_alias="SettlementPeriod"
     )
@@ -134,7 +134,7 @@ class PrepaidPayment(_UblModel):
 
     id: str | None = Field(default=None, serialization_alias="ID")
     paid_amount: Decimal | None = Field(default=None, serialization_alias="PaidAmount")
-    paid_amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    paid_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
     paid_date_time: datetime | None = Field(default=None, serialization_alias="PaidDateTime")
 
     @field_validator("paid_amount", mode="before")

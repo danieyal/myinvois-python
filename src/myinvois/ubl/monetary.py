@@ -39,7 +39,7 @@ class LegalMonetaryTotal(_UblModel):
     # the actual currency is the document's DocumentCurrencyCode. The Phase 3c
     # envelope builder stamps the right currencyID based on the invoice's own
     # currency. Here we expose an optional override hook per amount.
-    currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
 
     @field_validator(
         "line_extension_amount",

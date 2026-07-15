@@ -118,7 +118,7 @@ class Party(_UblModel):
         serialization_alias="IndustryClassificationCode",
         description="(code, description) tuple — code per MSIC, description per MSIC table.",
     )
-    industry_classification_list_id: str = Field(default="MSIC", exclude=True, repr=False)
+    industry_classification_name_attr: str = Field(default="name", exclude=True, repr=False)
     endpoint_id: str | None = Field(default=None, exclude=True, repr=False)
     endpoint_id_scheme_id: str | None = Field(default=None, exclude=True, repr=False)
     party_identifications: list[PartyIdentification] = Field(
@@ -157,10 +157,12 @@ class Party(_UblModel):
     def _ser(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
         if self.industry_classification_code is not None:
-            code, _desc = self.industry_classification_code
-            out["IndustryClassificationCode"] = _leaf(
-                code, listID=self.industry_classification_list_id
-            )
+            code, desc = self.industry_classification_code
+            # PHP's setIndustryClassificationCode(code, $name=null) keeps the
+            # human-readable MSIC description in an attribute keyed "name"
+            # (NOT listID="MSIC"). The wire form must match that attribute name.
+            attr_name = self.industry_classification_name_attr
+            out["IndustryClassificationCode"] = _leaf(code, **{attr_name: desc})
         if self.endpoint_id is not None and self.endpoint_id_scheme_id is not None:
             sid = self.endpoint_id_scheme_id
             if sid.isdigit():
@@ -171,8 +173,8 @@ class Party(_UblModel):
                 pi.model_dump(by_alias=True, exclude_none=True) for pi in self.party_identifications
             ]
         if self.name is not None:
-            # Party uses a non-leaf ('PartyName' => ['Name' => $name]) form.
-            out["PartyName"] = {"Name": self.name}
+            # PHP emits PartyName as `[{ "Name": [{"_": $name}] }]`.
+            out["PartyName"] = {"Name": _leaf(self.name)}
         out["PostalAddress"] = self.postal_address.model_dump(by_alias=True, exclude_none=True)
         if self.physical_location is not None:
             out["PhysicalLocation"] = {

@@ -26,7 +26,7 @@ class AllowanceCharge(_UblModel):
         default=None, serialization_alias="MultiplierFactorNumeric"
     )
     amount: Decimal | None = Field(default=None, serialization_alias="Amount")
-    amount_currency_id: str | None = Field(default=None, exclude=True, repr=False)
+    amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
 
     @field_validator("multiplier_factor_numeric", "amount", mode="before")
     @classmethod
