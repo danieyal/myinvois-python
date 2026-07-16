@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 
 # Flip to True once XmlSigner is implemented.
-EXPECT_IMPLEMENTED = False
+EXPECT_IMPLEMENTED = True
 
 _XFAIL_REASON = (
     "XmlSigner not yet implemented (Phase 4.6). "

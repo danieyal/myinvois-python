@@ -98,9 +98,7 @@ def load_private_key(
     """
     key = load_pem_private_key(pem_bytes, password=password)
     if not isinstance(key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
-        raise TypeError(
-            f"Unsupported private key type {type(key).__name__!r}; expected RSA or EC."
-        )
+        raise TypeError(f"Unsupported private key type {type(key).__name__!r}; expected RSA or EC.")
     return key
 
 
@@ -249,9 +247,7 @@ def _sha256(data: bytes) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def sign_sha256(
-    data: bytes, private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
-) -> bytes:
+def sign_sha256(data: bytes, private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey) -> bytes:
     """RSA-PKCS1v15-SHA256 sign ``data`` and return the raw signature bytes."""
     if not isinstance(private_key, rsa.RSAPrivateKey):
         raise TypeError(

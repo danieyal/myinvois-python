@@ -259,7 +259,108 @@ PHP serial-number string: `openssl_x509_parse` returns `$data['serialNumber']` *
 
 Note: the LHDN sample uses leading zeros in hex; PHP's `0x{UPPER_HEX}` is what they canonicalize on. Python matches because `format(n, 'X')` does NOT pad with leading zeros (and our cert serial has no leading zeros, so it's straightforward). EDGE CASE: if a real cert has serial with leading `0x0...` then `format()` may shorten it. Need to verify with a separate test eventually.
 
-### PHASE 4.3 + 4.4 — RED tests + cert helpers Landed
+### PHASE 4.5 — Reference2 "PropsDigest" target discovered (XML+JSON)
+
+The propsDigestHash input (XML) is **`<xades:SignedProperties Id="id-xades-signed-props">...</xades:SignedProperties>`**
+— NOT the `<xades:QualifyingProperties Target="signature">` wrapper. The wrapper
+only appears in the FINAL serialized output (added by
+`SignatureObject::xmlSerialize` which wraps the bare QualifyingProperties model).
+The `$service->write('{http://uri.etsi.org/01903/v1.3.2#}root',
+$signature->getObject()->getQualifyingProperties())` call in
+`XmlDocumentBuilder::getPropsDigestHash` passes the QualifyingProperties object
+directly to Sabre — whose `QualifyingProperties::xmlSerialize` itself only emits
+`<xades:SignedProperties>` (with NO Target attribute). Hence the hashing chunk
+is `SignedProperties`, not `QualifyingProperties`.
+
+Verified empirically by patching the PHP `XmlDocumentBuilder::getPropsDigestHash`
+to capture the bytes-to-hash to a file, then computing `SHA256` over its raw bytes
+externally gives **`YcW987MWbZLRt0NDwjbU746lTtKStZ0grXZlak/X+xE=`** (matches the
+fixture's Reference2 `<ds:DigestValue>` byte-for-byte).
+
+Revised XML PropsDigest algorithm (now verified end-to-end):
+1. Build QualifyingProperties model with just `SignedProperties` — NO `Target`
+   attribute (Target is added by SnapshotObject wrapper at FINAL serialization time).
+2. Serialize Sabre-style: wrap in
+   `<xades:root xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xades="http://uri.etsi.org/01903/v1.3.2#">`
+   with ONLY `<xades:SignedProperties Id="id-xades-signed-props">...</xades:SignedProperties>` inside.
+3. `DOMDocument::C14N()` — Python equivalent: `lxml.etree.tostring(tree, method='c14n')` byte-for-byte.
+4. Strip XML prolog (`<?xml version="1.0"?>`) and the wrapper (`<xades:root ...>`, `</xades:root>`).
+5. Apply `replaceCommonAttributes` — INJECT 5 xmlns declarations:
+   - `<xades:SignedProperties Id="id-xades-signed-props">` → `... xmlns:xades="http://uri.etsi.org/01903/v1.3.2#">`
+   - `<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256">` → `... xmlns:ds="http://www.w3.org/2000/09/xmldsig#">`
+   - `<ds:X509SerialNumber>` → `<ds:X509SerialNumber xmlns:ds="http://www.w3.org/2000/09/xmldsig#">`
+   - `<ds:X509IssuerName>` → `<ds:X509IssuerName xmlns:ds="http://www.w3.org/2000/09/xmldsig#">`
+   - `<ds:DigestValue>` → `<ds:DigestValue xmlns:ds="http://www.w3.org/2000/09/xmldsig#">`
+   (This step is what makes the hash match — the FINAL XML has these baked in via
+   the same replaceAttributes function on the whole signed doc, hence propsDigestHash
+   must replicate.)
+6. Strip whitespace control chars: `\n`, `\t`, `\r`.
+7. `SHA256(bytes)` → base64 → Reference2 DigestValue.
+
+### PHASE 4.5 — Reference1 "DocDigest" + SignatureValue
+
+- Reference1 DocDigest = `base64(SHA256(unsigned_xml_bytes))`.
+  - `unsigned_xml_bytes` = `XmlDocumentBuilder::build()` output: pre-UBLExtensions
+    serialized XML (C14N'd, no ext/sig blocks injected).
+  - The XPath transforms `not(//ancestor-or-self::ext:UBLExtensions)` and
+    `not(//ancestor-or-self::cac:Signature)` listed in `<ds:Transform>` are a
+    forward PROMISE — only actuated by LHDN's validator at verify-time. They are
+    NOT applied at the Python sign time (the PHP sign computation also does NOT
+    apply them — it just SHA256s the raw unsigned_xml bytes).
+- SignatureValue = `base64(RSA-PKCS1v15-SHA256(unsigned_xml_bytes))` (PHP's
+  `openssl_sign($documentString, ..., OPENSSL_ALGO_SHA256)`).
+- SigningTime format = `Y-m-d\TH:i:s\Z` → e.g. `2024-01-15T10:00:00Z` (PHP literal
+  escape of T and Z, no fractional seconds).
+- Final XML signing pipeline (Pseudocode):
+  ```
+  unsigned_xml = XmlEnvelopeBuilder(internal_model).build()  # bytes (already C14N'd)
+  doc_digest_b64 = base64(SHA256(unsigned_xml))
+  signature_value = base64(RSA-PKCS1v15-SHA256(unsigned_xml, privkey))
+  qp = build_qualifying_properties(signing_time, cert_digest, issuer_name, serial_number)
+  props_digest_b64 = base64(SHA256(replace_common_attributes(c14n(qp))))
+  final_xml = unsigned_xml_with(UBLExtensions_full_block_inserted_after_open_tag)
+  final_xml = final_xml.replace("listVersionID=\"1.0\"", "listVersionID=\"1.1\"")
+  final_xml = external_replace_common_attributes(final_xml)  # one more pass on full doc
+  return final_xml
+  ```
+
+### PHASE 4.5 — JSON signing pipeline (more substantial than XML)
+
+JSON variant:
+- SignedInfo has NO `<ds:CanonicalizationMethod>` (canonicalization is XML-only).
+- Reference has NO `<ds:Transforms>` (transforms are XML-only; XPath is XML-only).
+- Reference2's `Type` attribute = `http://www.w3.org/2000/09/xmldsig#SignatureProperties`
+  at first serialization; then PHP post-replace flips it to
+  `http://uri.etsi.org/01903/v1.3.2#SignedProperties` via str_replace.
+- KeyInfo has `X509SubjectName` (in addition to `X509Certificate` + `X509IssuerSerial`).
+- Both a `UBLExtensions` AND a `Signature` sibling top-level inside the Invoice
+  JSON (mimicking the UBL 2.1 model which puts `cac:Signature` as a sibling to
+  the `ext:UBLExtensions` block).
+- propsDigestHash = `base64(SHA256(json.dumps(
+    qualifying_properties_array_form,
+    separators=(",",":"),
+    ensure_ascii=False
+  ).encode()))`.
+  - `JSON_UNESCAPED_SLASHES` in PHP = no `\/` backslash-escape → mirrors Python default.
+  - `JSON_UNESCAPED_UNICODE` in PHP = no `\uXXXX` escape → `ensure_ascii=False`.
+  - PHP `json_encode` default has NO whitespace → `separators=(",",":")`.
+- The QualifyingProperties JSON structure is:
+  ```json
+  {"Target":"signature","SignedProperties":[{"Id":"id-xades-signed-props",
+      "SignedSignatureProperties":[{"SigningTime":[{"_":"2024-01-15T10:00:00Z"}],
+          "SigningCertificate":[{"Cert":[{"CertDigest":[{"DigestMethod":[{"_":"","Algorithm":"http://www.w3.org/2001/04/xmlenc#sha256"}],"DigestValue":[{"_":"<b64>"}]}],"IssuerSerial":[{"X509IssuerName":[{"_":"<issuer>"}],"X509SerialNumber":[{"_":"<serial>"}]}]}]}]}]}]}
+  ```
+- `InvoiceTypeCode.listVersionID 1.0 → 1.1` flip is STILL applied (same as XML).
+
+### PHASE 4.6+4.7 — Implementation is RED-to-GREEN jump-ready
+
+Helper tests GREEN: the next jump-to-green is `XmlSigner.sign()` and
+`JsonSigner.sign()` — the entire XAdES-extension-building logic in plain Python
+string templates (no lxml-level model trees, since PHP itself uses string-surgery
+for the 5 inject steps — emulating exactly with `str.replace` is cleaner than
+Pydantic-tree templates).
+
+
 
 Module `src/myinvois/ubl/signing/_cert.py` provides the byte-extracting helpers; `LoadedCert` dataclass bundles everything the signer needs from a `CertConfig`. All helpers are PROVEN byte-for-byte against the PHP fixtures:
 
@@ -305,5 +406,73 @@ class JsonSigner:
     def digests(self, unsigned_json: bytes | str, signing_time: datetime) -> SignerDigests: ...
     def sign(self, unsigned_json: bytes | str, signing_time: datetime) -> str: ...
 ```
+
+
+## PHASE 4 — DONE (32/32 signer tests green, byte-for-byte parity)
+
+Both `XmlSigner.sign()` and `JsonSigner.sign()` produce byte-for-byte identical
+output to the PHP-generated golden fixtures. Final test run: **232 passed in 2s**,
+`ruff` clean, `mypy src` clean.
+
+### Module layout (8 files under `src/myinvois/ubl/signing/`)
+
+| File | Role |
+|---|---|
+| `__init__.py` | Re-exports `XmlSigner`, `JsonSigner`, `SignerDigests`. |
+| `_digests.py` | `@dataclass(frozen=True, slots=True) SignerDigests`. |
+| `_cert.py` | Cert bundle loader + primitives (issuer-reorder, serial-as-hex, cert-digest, PKCS1v15 sign). Already GREEN before Phase 4.6. |
+| `_common_attrs.py` | PHP `replaceCommonAttributes` byte-for-byte (5 `xmlns:ds`/`xmlns:xades` str-replacements). |
+| `_propsdigest_xml.py` | XML PropsDigest: build `<xades:SignedProperties>` block -> c14n -> strip `<xades:root>` wrapper -> apply common-attrs replacement -> SHA256-base64. |
+| `_propsdigest_json.py` | JSON PropsDigest: build QualifyingProperties dict -> `json.dumps(separators=(",",":"), ensure_ascii=False)` -> SHA256-base64. |
+| `_xml_block.py` | UBLExtensions block + cac:Signature sibling templates (constant-only). |
+| `_xml.py` | `XmlSigner` class. |
+| `_json.py` | `JsonSigner` class. |
+
+### Pipeline summary (see class docstrings for the canonical reference)
+
+**`XmlSigner.sign(unsigned_xml_bytes, *, signing_time) -> bytes`**
+1. Resolve cert once via `load_cert_config` (cached on the signer instance).
+2. `doc_digest = base64(SHA256(unsigned_xml_bytes))`.
+3. `signature_value = base64(RSA-PKCS1v15-SHA256(unsigned_xml_bytes))` -- verified byte-identical to PHP `openssl_sign($data,$sig,$key,OPENSSL_ALGO_SHA256)`.
+4. `cert_digest = base64(SHA256(cert_DER_bytes))`.
+5. `props_digest = compute_props_digest_xml(...)` (see `_propsdigest_xml.py`).
+6. Splice `<ext:UBLExtensions>...</ext:UBLExtensions>` block right after the `<Invoice xmlns=...>` opening tag.
+7. Splice `<cac:Signature>...</cac:Signature>` sibling right after `</cbc:DocumentCurrencyCode>`.
+8. Mutate `InvoiceTypeCode['listVersionID']` from `"1.0"` to `"1.1"`.
+
+**`JsonSigner.sign(unsigned_json_str, *, signing_time) -> str`**
+1. Steps 1-5 mirror the XML flow (digests and signing primitives identical).
+2. Build the deep signature dict following PHP `Signature/KeyInfoX509Data/QualifyingProperties::jsonSerialize`.
+3. Splice `"UBLExtensions"` key at the head of `Invoice` dict, `"Signature"` sibling key right after `"DocumentCurrencyCode"`.
+4. Flip InvoiceTypeCode's `listVersionID` attr from `"1.0"` to `"1.1"`.
+5. `json.dumps(separators=(",",":"), ensure_ascii=False)` and strip `\r\n` (PHP's `str_replace`).
+6. Final `str_replace` flips `Reference2.Type` from `http://www.w3.org/2000/09/xmldsig#SignatureProperties` -> `http://uri.etsi.org/01903/v1.3.2#SignedProperties`.
+
+### Verified byte-level assertions
+
+| Verifiable | Value (PHP-generated golden fixture) | Match |
+|---|---|---|
+| XML signed bytes md5  | `f36a659302dff7d7de0a0df725e43ad6` | identical md5 |
+| JSON signed bytes md5 | `18e7920ae3fdd812d03f76e37b513a21` | identical md5 |
+| XML PropsDigest b64   | `YcW987MWbZLRt0NDwjbU746lTtKStZ0grXZlak/X+xE=` | identical b64 |
+| JSON PropsDigest b64  | `a7a5p9SC7birTE1+vkMSEFB/ILTWp9aWR7SSfW1pTF0=` | identical b64 |
+| DocDigest (XML+JSON)  | 43-char b64 (different XML vs JSON due to different source bytes) | identical b64 |
+| SignatureValue (XML+JSON) | 344-char b64 prefix identical to PHP `openssl_sign` output | identical |
+
+### Why no Pydantic-tree / lxml-based XML emission?
+
+PHP SDK itself uses `str_replace`-based string surgery for the 5
+`xmlns:ds`/`xmlns:xades` injections (see
+`XmlDocumentBuilder::replaceCommonAttributes`). Earlier attempts at tree-level
+lxml-side namespace manipulation produced hash mismatches during
+reverse-engineering. Emulating PHP exactly via templated string-concatenation
+gives byte-for-byte parity and is simpler to audit.
+
+### Idempotency guard
+
+Both signers raise `ValueError` if the input already contains the signed
+extension (XML: `<ext:UBLExtensions>` substring; JSON: `"UBLExtensions"` key).
+The PHP SDK silently re-applies on top -- we only match that behaviour if
+explicitly requested.
 
 

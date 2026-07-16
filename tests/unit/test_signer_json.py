@@ -37,7 +37,7 @@ from pathlib import Path
 
 import pytest
 
-EXPECT_IMPLEMENTED = False
+EXPECT_IMPLEMENTED = True
 
 _XFAIL_REASON = (
     "JsonSigner not yet implemented (Phase 4.7). "
