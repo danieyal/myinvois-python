@@ -112,11 +112,11 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 3c: UBL **JSON** serializer (envelope builder) — VERIFIED BYTE-FOR-BYTE PARITY with `klsheng/myinvois-php-sdk` `JsonDocumentBuilder::build()`. Concrete SW fix: `Party.industry_classification_code` now serialises the description as attribute keyed `"name"` (PHP's `setIndustryClassificationCode(code, $name=null)`), NOT `listID="MSIC"`. All `*_currency_id` model fields default to `"MYR"` (matches PHP per-class `$taxAmountAttributes = [UblAttributes::CURRENCY_ID => CurrencyCodes::MYR]`). Pinned by `TestDeterminism::test_byte_for_byte_matches_php_sdk_reference_output`. PHP SDK reference repo cloned at `/tmp/phpsdk` with `composer install --prefer-dist` (sabre/xml 4.1 required for canonical output).
 - [x] Phase 3c (XML half): `XmlEnvelopeBuilder` — VERIFIED BYTE-FOR-BYTE PARITY with `klsheng/myinvois-php-sdk` `XmlDocumentBuilder::build()`. Implementation: lxml-built tree post-processed via `etree.tostring(method='c14n', exclusive=False, with_comments=False)` — inclusive C14N-1.0 (PHP's `DOMDocument::C14N()` default args), keeps all four xmlns declarations on root invoice element. Element namespace prefix mapping dispatched via auto-generated `src/myinvois/ubl/builders/_prefixes.py` (137 entries, scanned from PHP `XmlSchema::CBC|CAC|EXT . '<Name>'` occurrences + 10 manually-named dynamic-composition keys including the `LegalMonetaryTotal` amount keys and `InvoiceLine`/`InvoicedQuantity` from `$xmlTagName`/`$quantityLabel` interpolations). Number text format uses new `format_as_php_xml_token()` (2dp fixed, trailing zeros preserved — differs from `format_as_php_float_token()` which strips trailing zeros for JSON). Pinned by `TestPhpSdkByteParity::test_byte_for_byte_matches_php_sdk_reference_xml_output` against `tests/fixtures/golden_invoice_unsigned.xml` (5027 bytes, md5-diffed against PHP output at fixture-population).
 - [x] Phase 4: digital signature (XmlSigner + JsonSigner, byte-for-byte PHP parity, commit `9ce6d48`, 232 tests)
-- [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `<this>`, 260 tests)
+- [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `f4327a1`, 260 tests)
 - [ ] Phase 6: async mirror + polish + publish
 
 ## CURRENT_STATE
-Phases 0-5 done. 260 tests passing (up from 232). `ruff check`, `ruff format --check`, `mypy src` all clean. Working tree currently dirty with Phase 5 changes pending commit.
+Phases 0-5 done and committed. 260 tests passing (up from 232). `ruff check`, `ruff format --check`, `mypy src` all clean. Working tree clean after Phase 5 commit `f4327a1` on `master`.
 
 ## CODE_STATE
 - `src/myinvois/codes/__init__.py` implements curated `StrEnum(_EnumLookupMixin)` tables + `_CodeTable` loader instances; `src/myinvois/codes/_data/*.json` 8 tables = 3,637 rows. Re-extract via `uv run python scripts/extract_codes.py`.
@@ -128,10 +128,10 @@ Phases 0-5 done. 260 tests passing (up from 232). `ruff check`, `ruff format --c
 - `src/myinvois/client.py` (Phase 5) adds the `submissions` lazy property exposing `SubmissionsService` (mirrors the existing `documents`/`taxpayer`/`notifications` patterns).
 
 ## TESTS
-260 passing (232 from prior phases + 28 new Phase 5 tests: 16 in `tests/unit/test_submissions.py` + 12 in `tests/unit/test_document_state.py`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (`(()300) chars), and server-level error passthrough via `DocumentStateChangeResponse.error`.
+260 passing (232 from prior phases + 28 new Phase 5 tests: 16 in `tests/unit/test_submissions.py` + 12 in `tests/unit/test_document_state.py`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`.
 
 ## VERSION_CONTROL_STATUS
-Phase 4 commit = `9ce6d48` on `master` (note: branch is `master` not `main`). 33 files tracked as of Phase 3a; Phase 4 + Phase 5 added more.
+Phase 4 commit = `9ce6d48` on `master`. Phase 5 commit = `f4327a1` on `master` (note: branch is `master` not `main`). 33 files tracked as of Phase 3a; Phase 4 + Phase 5 added more.
 
 ## CHANGES
 - `pyproject.toml` has `[tool.uv.build-backend]` `data-includes` shipping `py.typed` + `_data/*.json` (PEP 561 marker). Codes symbols re-exported from top-level `myinvois/__init__.py`.
