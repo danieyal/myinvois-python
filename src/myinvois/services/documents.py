@@ -1,13 +1,15 @@
-"""Documents service — read endpoints for the MyInvois documents API.
+"""Documents service — read + state-mutation endpoints.
 
-Phase 2 covers read endpoints. The cancel/reject state changes live in
-``services/submissions`` under Phase 5.
+Phase 2 covers read endpoints. The cancel/reject PUT-state changes (Phase 5)
+live on the same service (matching the LHDN API URL family
+``/api/v1.0/documents/...``).
 
-Endpoints (from PHP SDK DocumentService):
-- GET /api/v1.0/documents/{uuid}/raw   : source XML/JSON + metadata
-- GET /api/v1.0/documents/{uuid}/details: full doc + validation results
-- GET /api/v1.0/documents/recent        : recent (last 30 days), paginated
-- GET /api/v1.0/documents/search         : full search (needs date pair)
+Endpoints (from PHP SDK DocumentService + the LHDN API docs):
+- GET  /api/v1.0/documents/{uuid}/raw        : source XML/JSON + metadata
+- GET  /api/v1.0/documents/{uuid}/details     : full doc + validation results
+- GET  /api/v1.0/documents/recent             : recent (last 30 days), paginated
+- GET  /api/v1.0/documents/search             : full search (needs date pair)
+- PUT  /api/v1.0/documents/state/{uuid}/state : cancel or reject a document
 """
 
 from __future__ import annotations
@@ -19,12 +21,15 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from myinvois.exceptions import ValidationError
+from myinvois.services.models import DocumentStateChangeResponse
 
 if TYPE_CHECKING:
     from myinvois.client import MyInvoisClient
 
 __all__ = [
     "DocumentDirection",
+    "DocumentStateChangeResponse",
+    "DocumentStateChangeStatus",
     "DocumentStatus",
     "DocumentsService",
     "RecentDocumentsQuery",
@@ -42,6 +47,22 @@ class DocumentStatus(StrEnum):
     INVALID = "Invalid"
     CANCELLED = "Cancelled"
     SUBMITTED = "Submitted"
+
+
+class DocumentStateChangeStatus(StrEnum):
+    """Lower-case ``status`` body values for ``PUT /documents/state/{uuid}/state``.
+
+    Spec: https://sdk.myinvois.hasil.gov.my/einvoicingapi/03-cancel-document/
+          https://sdk.myinvois.hasil.gov.my/einvoicingapi/04-reject-document/
+
+    The LHDN API expects the lowercase forms (``"cancelled"`` / ``"rejected"``)
+    in the request body. The response inverts to title case: ``"Cancelled"``
+    for cancel and ``"Requested for Rejection"`` for reject (until the
+    Supplier cancels).
+    """
+
+    CANCELLED = "cancelled"
+    REJECTED = "rejected"
 
 
 def _to_zulu(value: datetime | str | None) -> str | None:
@@ -259,3 +280,93 @@ class DocumentsService:
         )
         raw = self._client.request("GET", f"{self.BASE_PATH}/search", params=query.to_params())
         return raw if isinstance(raw, dict) else {}
+
+    # Phase 5 — state mutations (cancel / reject) ----------------------------
+
+    #: Minimum and maximum allowed byte-length of the ``reason`` text field.
+    #: Spec: https://sdk.myinvois.hasil.gov.my/einvoicingapi/03-cancel-document/
+    #: The official doc limits ``reason`` to 300 characters; reason becomes
+    #: mandatory when cancelling (an empty string is permitted by the wire,
+    #: matching the PHP SDK's default of ``''``).
+    REASON_MAX_LEN: int = 300
+    _STATE_PATH = "/api/v1.0/documents/state"
+
+    def set_document_state(
+        self,
+        uuid: str,
+        status: DocumentStateChangeStatus | str,
+        *,
+        reason: str = "",
+    ) -> DocumentStateChangeResponse:
+        """Generic document-state-change call.
+
+        This is the underlying primitive used by :meth:`cancel_document`
+        (``status="cancelled"``) and :meth:`reject_document`
+        (``status="rejected"``). Use those convenience wrappers unless you
+        need the raw primitive.
+
+        Pre-validates the ``reason`` length client-side (>(()300 chars raises
+        :class:`ValidationError`) — matches the LHDN API's documented limit
+        and avoids one round-trip.
+        """
+        # Coerce the status to the canonical lowercase form.
+        if isinstance(status, DocumentStateChangeStatus):
+            status_val = status.value
+        else:
+            try:
+                status_val = DocumentStateChangeStatus(str(status)).value
+            except ValueError as exc:
+                raise ValidationError(
+                    f"Unknown document state-change status: {status!r}. "
+                    f"Expected one of {[s.value for s in DocumentStateChangeStatus]}."
+                ) from exc
+
+        self._validate_reason(reason)
+
+        body = {"status": status_val, "reason": reason}
+        raw = self._client.request("PUT", f"{self._STATE_PATH}/{uuid}/state", json=body)
+        if not isinstance(raw, dict):
+            raise TypeError(f"Expected dict from API, got {type(raw).__name__}")
+        return DocumentStateChangeResponse.model_validate(raw)
+
+    def cancel_document(
+        self,
+        uuid: str,
+        reason: str = "",
+    ) -> DocumentStateChangeResponse:
+        """Cancel a previously-issued document.
+
+        Spec: https://sdk.myinvois.hasil.gov.my/einvoicingapi/03-cancel-document/
+
+        Only available to the issuer within a 72-hour window from the moment
+        the document was marked Valid. Server-level failures (window elapsed,
+        referenced by another doc, etc.) are reported back inside the
+        response's ``error`` block when the server returns a 200 with an
+        ``error`` field; transport-level failures raise the matching
+        :class:`~myinvois.exceptions.MyInvoisError` subclass.
+        """
+        return self.set_document_state(uuid, DocumentStateChangeStatus.CANCELLED, reason=reason)
+
+    def reject_document(
+        self,
+        uuid: str,
+        reason: str = "",
+    ) -> DocumentStateChangeResponse:
+        """Reject a received document and request the supplier to cancel it.
+
+        Spec: https://sdk.myinvois.hasil.gov.my/einvoicingapi/04-reject-document/
+
+        Only available to the recipient within a 72-hour window from the
+        moment the document was marked Valid. The document is **not**
+        immediately cancelled — the supplier must subsequently cancel.
+        """
+        return self.set_document_state(uuid, DocumentStateChangeStatus.REJECTED, reason=reason)
+
+    @classmethod
+    def _validate_reason(cls, reason: str) -> None:
+        if not isinstance(reason, str):
+            raise ValidationError(f"reason must be a str, got {type(reason).__name__}")
+        if len(reason) > cls.REASON_MAX_LEN:
+            raise ValidationError(
+                f"reason must not exceed {cls.REASON_MAX_LEN} characters (got {len(reason)})."
+            )

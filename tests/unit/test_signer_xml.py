@@ -87,6 +87,7 @@ _EXPECTED_SIGNATURE_VALUE_PREFIX = (
 def _import_signer():
     if EXPECT_IMPLEMENTED:
         from myinvois.ubl.signing import XmlSigner
+
         return XmlSigner
     pytest.skip("myinvois.ubl.signing.XmlSigner not yet importable")
 
@@ -94,6 +95,7 @@ def _import_signer():
 def _import_certconfig():
     if EXPECT_IMPLEMENTED:
         from myinvois.config import CertConfig
+
         return CertConfig
     pytest.skip("CertConfig not yet importable (already exists but kept lazy for xfail)")
 

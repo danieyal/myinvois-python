@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from myinvois.services.document_types import DocumentTypesService
     from myinvois.services.documents import DocumentsService
     from myinvois.services.notifications import NotificationsService
+    from myinvois.services.submissions import SubmissionsService
     from myinvois.services.taxpayer import TaxpayerService
 
 __all__ = ["MyInvoisClient"]
@@ -94,6 +95,7 @@ class MyInvoisClient:
         self._documents: DocumentsService | None = None
         self._taxpayer: TaxpayerService | None = None
         self._notifications: NotificationsService | None = None
+        self._submissions: SubmissionsService | None = None
         self._token_manager = TokenManager(
             client_id=client_id,
             client_secret=client_secret,
@@ -185,6 +187,14 @@ class MyInvoisClient:
         if self._notifications is None:
             self._notifications = NotificationsService(self)
         return self._notifications
+
+    @property
+    def submissions(self) -> SubmissionsService:
+        from myinvois.services.submissions import SubmissionsService
+
+        if self._submissions is None:
+            self._submissions = SubmissionsService(self)
+        return self._submissions
 
     # ----- HTTP ----------------------------------------------------------
 

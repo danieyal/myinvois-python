@@ -82,6 +82,7 @@ _EXPECTED_SIGNATURE_VALUE_PREFIX = "R//cvLKAAF73nRogLgFhStZVJPLJZTfZyFexFwiGjMN"
 def _import_signer():
     if EXPECT_IMPLEMENTED:
         from myinvois.ubl.signing import JsonSigner
+
         return JsonSigner
     pytest.skip("myinvois.ubl.signing.JsonSigner not yet importable")
 
@@ -89,6 +90,7 @@ def _import_signer():
 def _import_certconfig():
     if EXPECT_IMPLEMENTED:
         from myinvois.config import CertConfig
+
         return CertConfig
     pytest.skip("CertConfig not yet importable (already exists but kept lazy for xfail)")
 
@@ -193,9 +195,9 @@ class TestJsonStructuralInvariants:
         CertConfig = _import_certconfig()
         cert = CertConfig(certificate_path=str(_cert_pem), private_key_path=str(_key_pem))
         out = json.loads(JsonSigner(cert).sign(_build_unsigned_json(), signing_time=_SIGNING_TIME))
-        sig = out["Invoice"][0]["UBLExtensions"][0]["UBLExtension"][0][
-            "ExtensionContent"
-        ][0]["UBLDocumentSignatures"][0]["SignatureInformation"][0]["Signature"][0]
+        sig = out["Invoice"][0]["UBLExtensions"][0]["UBLExtension"][0]["ExtensionContent"][0][
+            "UBLDocumentSignatures"
+        ][0]["SignatureInformation"][0]["Signature"][0]
         assert "CanonicalizationMethod" not in sig["SignedInfo"][0]
 
     @_maybe_xfail
@@ -206,11 +208,9 @@ class TestJsonStructuralInvariants:
         CertConfig = _import_certconfig()
         cert = CertConfig(certificate_path=str(_cert_pem), private_key_path=str(_key_pem))
         out = json.loads(JsonSigner(cert).sign(_build_unsigned_json(), signing_time=_SIGNING_TIME))
-        refs = out["Invoice"][0]["UBLExtensions"][0]["UBLExtension"][0][
-            "ExtensionContent"
-        ][0]["UBLDocumentSignatures"][0]["SignatureInformation"][0]["Signature"][0][
-            "SignedInfo"
-        ][0]["Reference"]
+        refs = out["Invoice"][0]["UBLExtensions"][0]["UBLExtension"][0]["ExtensionContent"][0][
+            "UBLDocumentSignatures"
+        ][0]["SignatureInformation"][0]["Signature"][0]["SignedInfo"][0]["Reference"]
         for ref in refs:
             assert "Transforms" not in ref
 
@@ -222,11 +222,9 @@ class TestJsonStructuralInvariants:
         CertConfig = _import_certconfig()
         cert = CertConfig(certificate_path=str(_cert_pem), private_key_path=str(_key_pem))
         out = json.loads(JsonSigner(cert).sign(_build_unsigned_json(), signing_time=_SIGNING_TIME))
-        x509_data = out["Invoice"][0]["UBLExtensions"][0]["UBLExtension"][0][
-            "ExtensionContent"
-        ][0]["UBLDocumentSignatures"][0]["SignatureInformation"][0]["Signature"][0][
-            "KeyInfo"
-        ][0]["X509Data"][0]
+        x509_data = out["Invoice"][0]["UBLExtensions"][0]["UBLExtension"][0]["ExtensionContent"][0][
+            "UBLDocumentSignatures"
+        ][0]["SignatureInformation"][0]["Signature"][0]["KeyInfo"][0]["X509Data"][0]
         keys = list(x509_data.keys())
         assert "X509SubjectName" in keys
         assert "X509IssuerSerial" in keys

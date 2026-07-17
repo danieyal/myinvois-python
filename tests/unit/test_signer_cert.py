@@ -61,8 +61,7 @@ _JSON_FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "golden_in
 
 # Expected wire bytes (extracted from the PHP-generated fixtures; see AGENTS.md).
 _EXPECTED_ISSUER_NAME = (
-    "emailAddress=test@example.com, CN=Test LHDN Signing, "
-    "OU=MyInvoice Unit, O=Test Org, C=MY"
+    "emailAddress=test@example.com, CN=Test LHDN Signing, OU=MyInvoice Unit, O=Test Org, C=MY"
 )
 _EXPECTED_SERIAL_NUMBER = "0x10D75D74EB922AEE2774FACA060AC339BE6AC425"
 _EXPECTED_CERT_DIGEST_B64 = "UlhmSPmya4BK8Vd+VPdKdOxUAiLXC4F1uc1EB+NlaRM="
@@ -72,9 +71,11 @@ _EXPECTED_CERT_DIGEST_B64 = "UlhmSPmya4BK8Vd+VPdKdOxUAiLXC4F1uc1EB+NlaRM="
 # Import helper: keeps the file importable before the impl lands.
 # ---------------------------------------------------------------------------
 
+
 def _import_cert_module():
     if EXPECT_IMPLEMENTED:
         from myinvois.ubl.signing import _cert
+
         return _cert
     pytest.skip("myinvois.ubl.signing._cert not yet importable")
 
@@ -84,6 +85,7 @@ def _import_cert_module():
 # ``getRawContent``: strip BEGIN / END lines, drop trailing blank lines, then
 # ``"".join`` remaining chunks (no ``\n`` separators).
 # ---------------------------------------------------------------------------
+
 
 def _expected_cert_raw_from_pem() -> str:
     """Replicate PHP getRawContent on the fixture cert PEM."""
@@ -100,6 +102,7 @@ def _expected_cert_raw_from_pem() -> str:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCertPemRawContent:
     @_maybe_xfail
@@ -137,7 +140,7 @@ class TestIssuerNameString:
         # The XML uses ``<ds:X509IssuerName xmlns:ds="...">{issuer}</...>``
         # (the xmlns prefix is injected by ``replaceCommonAttributes``).
         assert re.search(
-            fr"<ds:X509IssuerName[^>]*>{re.escape(issuer)}</ds:X509IssuerName>",
+            rf"<ds:X509IssuerName[^>]*>{re.escape(issuer)}</ds:X509IssuerName>",
             xml,
         )
 
@@ -158,7 +161,7 @@ class TestSerialNumberString:
         s = cert.serial_number_string(cert_obj)
         xml = _XML_FIXTURE.read_text(encoding="utf-8")
         assert re.search(
-            fr"<ds:X509SerialNumber[^>]*>{re.escape(s)}</ds:X509SerialNumber>",
+            rf"<ds:X509SerialNumber[^>]*>{re.escape(s)}</ds:X509SerialNumber>",
             xml,
         )
 
@@ -180,6 +183,4 @@ class TestCertDigestB64:
         cert_obj = cert.load_x509(_CERT_PEM.read_bytes())
         d = cert.cert_digest_b64(cert_obj)
         xml = _XML_FIXTURE.read_text(encoding="utf-8")
-        assert re.search(
-            fr"<ds:DigestValue[^>]*>{re.escape(d)}</ds:DigestValue>", xml
-        )
+        assert re.search(rf"<ds:DigestValue[^>]*>{re.escape(d)}</ds:DigestValue>", xml)

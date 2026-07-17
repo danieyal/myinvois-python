@@ -111,34 +111,37 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
   - Module layout: `src/myinvois/ubl/` → `__init__.py`, `address.py`, `party.py`, `line.py`, `tax.py`, `monetary.py`, `payment.py`, `reference.py`, `common.py`, `invoice.py` (top-level Invoice).
 - [x] Phase 3c: UBL **JSON** serializer (envelope builder) — VERIFIED BYTE-FOR-BYTE PARITY with `klsheng/myinvois-php-sdk` `JsonDocumentBuilder::build()`. Concrete SW fix: `Party.industry_classification_code` now serialises the description as attribute keyed `"name"` (PHP's `setIndustryClassificationCode(code, $name=null)`), NOT `listID="MSIC"`. All `*_currency_id` model fields default to `"MYR"` (matches PHP per-class `$taxAmountAttributes = [UblAttributes::CURRENCY_ID => CurrencyCodes::MYR]`). Pinned by `TestDeterminism::test_byte_for_byte_matches_php_sdk_reference_output`. PHP SDK reference repo cloned at `/tmp/phpsdk` with `composer install --prefer-dist` (sabre/xml 4.1 required for canonical output).
 - [x] Phase 3c (XML half): `XmlEnvelopeBuilder` — VERIFIED BYTE-FOR-BYTE PARITY with `klsheng/myinvois-php-sdk` `XmlDocumentBuilder::build()`. Implementation: lxml-built tree post-processed via `etree.tostring(method='c14n', exclusive=False, with_comments=False)` — inclusive C14N-1.0 (PHP's `DOMDocument::C14N()` default args), keeps all four xmlns declarations on root invoice element. Element namespace prefix mapping dispatched via auto-generated `src/myinvois/ubl/builders/_prefixes.py` (137 entries, scanned from PHP `XmlSchema::CBC|CAC|EXT . '<Name>'` occurrences + 10 manually-named dynamic-composition keys including the `LegalMonetaryTotal` amount keys and `InvoiceLine`/`InvoicedQuantity` from `$xmlTagName`/`$quantityLabel` interpolations). Number text format uses new `format_as_php_xml_token()` (2dp fixed, trailing zeros preserved — differs from `format_as_php_float_token()` which strips trailing zeros for JSON). Pinned by `TestPhpSdkByteParity::test_byte_for_byte_matches_php_sdk_reference_xml_output` against `tests/fixtures/golden_invoice_unsigned.xml` (5027 bytes, md5-diffed against PHP output at fixture-population).
-- [ ] Phase 4: digital signature
-- [ ] Phase 5: submit + state services
+- [x] Phase 4: digital signature (XmlSigner + JsonSigner, byte-for-byte PHP parity, commit `9ce6d48`, 232 tests)
+- [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `<this>`, 260 tests)
 - [ ] Phase 6: async mirror + polish + publish
 
 ## CURRENT_STATE
-Phase 0/1/2 + Phase 3a done and committed (commit `eafb615`). 103 tests passing. `ruff` + `mypy src` + `mypy tests` all clean.
+Phases 0-5 done. 260 tests passing (up from 232). `ruff check`, `ruff format --check`, `mypy src` all clean. Working tree currently dirty with Phase 5 changes pending commit.
 
 ## CODE_STATE
-- `src/myinvois/codes/__init__.py` NOW IMPLEMENTED. Design = `_CodeTable` loader instances (caching rows + index) + curated `StrEnum(_EnumLookupMixin)` tables (`MalaysianState`, `TaxType`, `PaymentMethod`, `DocumentTypeCode`[`.is_self_billed`/`.coerce`], `Currency`) + lookup-only singletons (`ClassificationCode`, `Country`, `MSIC`, `UnitCode`). `msic_category_for()` helper. Enums get lookup classmethods from a module-level `_ENUM_LOADERS` registry (because enum class bodies forbid post-creation setattr and treat bare string assignments as members).
-- `src/myinvois/codes/_data/*.json`: 8 tables = 3,637 rows. states(17) taxes(6) payment_means(8) classification(45) countries(253) currencies(180) msic(1174) units(1834).
-- `scripts/extract_codes.py`: regex extractor with `php_consts()` resolution (`CurrencyCodes::CODE` => `CurrencyCodes::MYR`) and per-code dedup (`UnitCodes` `KGM` dups removed). Re-run with `uv run python scripts/extract_codes.py`.
+- `src/myinvois/codes/__init__.py` implements curated `StrEnum(_EnumLookupMixin)` tables + `_CodeTable` loader instances; `src/myinvois/codes/_data/*.json` 8 tables = 3,637 rows. Re-extract via `uv run python scripts/extract_codes.py`.
+- `src/myinvois/ubl/` Phases 3b-3c hold the Pydantic domain models + `JsonEnvelopeBuilder`/`XmlEnvelopeBuilder`; both validated byte-for-byte against the PHP SDK golden fixtures.
+- `src/myinvois/ubl/signing/` (Phase 4) holds `XmlSigner`, `JsonSigner`, `SignerDigests` + 5 internal modules — all output md5-matched against PHP-generated `tests/fixtures/golden_invoice_signed.{xml,json}`.
+- `src/myinvois/services/submissions.py` (Phase 5) NEW: `SubmissionsService` + `build_submission_payload()` helper + re-exports for response models (`SubmitDocumentsResponse`, `AcceptedDocument`, `RejectedDocument`, `GetSubmissionResponse`, `DocumentSummary`, `DocumentSummaryTotals`, `SubmissionOverallStatus`, `DocumentSubmissionFormat`).
+- `src/myinvois/services/documents.py` (Phase 5 EXTENDED) adds `DocumentStateChangeStatus` enum + `set_document_state()` / `cancel_document()` / `reject_document()` + `DocumentStateChangeResponse` re-export.
+- `src/myinvois/services/models.py` (Phase 5 EXTENDED) adds `LhdnError`, `AcceptedDocument`, `RejectedDocument`, `SubmitDocumentsResponse`, `DocumentSummaryTotals`, `DocumentSummary` (with `model_validator(mode="before")` that nests the four camelCase `total*` keys into a `totals` sub-object), `GetSubmissionResponse`, `DocumentStateChangeResponse`.
+- `src/myinvois/client.py` (Phase 5) adds the `submissions` lazy property exposing `SubmissionsService` (mirrors the existing `documents`/`taxpayer`/`notifications` patterns).
 
 ## TESTS
-103 passing (was 80). New `tests/unit/test_codes.py` has 23 tests. Test fixtures annotated `Iterator[...]`; StrEnum equality assertions use `.value` to satisfy strict mypy (comparison-overlap otherwise).
+260 passing (232 from prior phases + 28 new Phase 5 tests: 16 in `tests/unit/test_submissions.py` + 12 in `tests/unit/test_document_state.py`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (`(()300) chars), and server-level error passthrough via `DocumentStateChangeResponse.error`.
 
 ## VERSION_CONTROL_STATUS
-Phase 3a commit = `eafb615` on `master` (note: branch is `master` not `main`). 33 files tracked. Working tree clean.
+Phase 4 commit = `9ce6d48` on `master` (note: branch is `master` not `main`). 33 files tracked as of Phase 3a; Phase 4 + Phase 5 added more.
 
 ## CHANGES
-- `pyproject.toml` now has `[tool.uv.build-backend]` `data-includes` shipping `py.typed` + `_data/*.json` (verified via fresh-venv `importlib.resources` runtime import). PEP 561 `py.typed` marker added.
-- Codes symbols re-exported from top-level `myinvois/__init__.py`.
+- `pyproject.toml` has `[tool.uv.build-backend]` `data-includes` shipping `py.typed` + `_data/*.json` (PEP 561 marker). Codes symbols re-exported from top-level `myinvois/__init__.py`.
 
 ## PENDING
 - [x] Phase 3b: UBL document models (Invoice-first)
 - [x] Phase 3c (JSON half): UBL JSON envelope builder — byte-for-byte parity with PHP SDK verified (md5sum match)
 - [x] Phase 3c (XML half): UBL XML envelope builder + canonicalisation prep — byte-for-byte parity with PHP SDK verified (md5sum match)
-- [ ] Phase 4: digital signature
-- [ ] Phase 5: submit + state services
+- [x] Phase 4: digital signature
+- [x] Phase 5: submit + state services
 - [ ] Phase 6: async mirror + polish + publish
 
 ## PHASE 4 — Digital signature (TDD, in flight)
@@ -475,4 +478,43 @@ extension (XML: `<ext:UBLExtensions>` substring; JSON: `"UBLExtensions"` key).
 The PHP SDK silently re-applies on top -- we only match that behaviour if
 explicitly requested.
 
+## PHASE 5 — Submit + state services (TDD, DONE)
 
+### Endpoints reverse-engineered from `sdk.myinvois.hasil.gov.my` (rank-1 authoritative docs)
+
+#### `POST /api/v1.0/documentsubmissions/` (note trailing slash)
+- Body: `{"documents": [{"format": "XML"|"JSON", "document": "<base64>", "documentHash": "<sha256 hex>", "codeNumber": "<str>"}, ...]}`.
+- Returns **HTTP 202** (accepted-for-async-validation), body:
+  `{"submissionUID": str, "acceptedDocuments": [{"uuid": str, "invoiceCodeNumber": str}], "rejectedDocuments": [{"invoiceCodeNumber": str, "error": LhdnError}]}`.
+- Rate limit recommendation: 100 RPM/client_id. Hard limits: 5 MB/submission, 100 docs/submission, 300 KB/doc.
+- The LHDN doc lists the format values as `"XML"` / `"JSON"` (uppercase). The PHP `MyInvoisHelper::getSubmitDocument()` auto-detects by JSON-parsing the content — replicated in `_looks_like_json()`.
+
+#### `GET /api/v1.0/documentsubmissions/{submissionUid}?pageNo=&pageSize=`
+- Returns **HTTP 200**, body: `{"submissionUid": str, "documentCount": int, "dateTimeReceived": str, "overallStatus": "in progress"|"valid"|"partially valid"|"invalid", "documentSummary": [DocumentSummary, ...]}`.
+- `page_no`/`page_size` are optional — when omitted no query keys are emitted (let LHDN default them). Max `pageSize=100`.
+- `DocumentSummary` carries the four `total*` keys at the same level as `uuid`/`status`/etc. A `@model_validator(mode="before")` lifts them into a nested `totals` sub-object so callers read `doc.totals.total_payable_amount` (Decimal-typed).
+- Rate limit: 300 RPM/client_id; poll interval 3-5s recommended.
+
+#### `PUT /api/v1.0/documents/state/{uuid}/state`
+- Same URL for cancel & reject; the body distinguishes them: `{"status": "cancelled"|"rejected", "reason": str}`. Note lowercase request-body values (server inverts to title-case `"Cancelled"` / `"Requested for Rejection"` in the response).
+- `reason`: capped at 300 chars (documented at the cancel endpoint). Enforced **client-side** in `_validate_reason()` to avoid one round-trip on the common error case.
+- Returns **HTTP 200**, body: `{"uuid": str, "status": str, "error": LhdnError?}`. The `error` block is populated when the request was logically rejected (e.g. `OperationPeriodOver`, `IncorrectState`, `ActiveReferencingDocuments`) — still returned with status 200 in the data we observed; transport-level failures raise typed `MyInvoisError` subclasses.
+- Cancel window: 72h from valid; only the **issuer** (or buyer for self-billed). Reject window: 72h from valid; only the **receiver**; one-shot (rejection can happen only once per document); supplier still has to actually cancel after the reject request.
+- Rate limit: 12 RPM/client_id.
+
+### Public API surface added
+- `client.submissions` -> `SubmissionsService` with `submit_documents(documents)` -> `SubmitDocumentsResponse`, `get_submission(uid, *, page_no=None, page_size=None)` -> `GetSubmissionResponse`.
+- `build_submission_payload(code_number, content, *, format=None)` -> dict: auto-detects `"XML"`/`"JSON"` from content (PHP `MyInvoisHelper::isJson` heuristic) when `format` not supplied, base64-encodes the bytes, lowercase-hex-SHA256-hashes the bytes for `documentHash`.
+- `client.documents.cancel_document(uuid, reason="")` / `reject_document(uuid, reason="")` / `set_document_state(uuid, status, *, reason="")` -> `DocumentStateChangeResponse`.
+- New enums: `DocumentSubmissionFormat` (`XML`/`JSON`), `SubmissionOverallStatus` (`in_progress`/`valid`/`partially_valid`/`invalid`), `DocumentStateChangeStatus` (`cancelled`/`rejected`).
+- Shared response models in `services/models.py`: `LhdnError`, `AcceptedDocument`, `RejectedDocument`, `SubmitDocumentsResponse`, `DocumentSummaryTotals`, `DocumentSummary`, `GetSubmissionResponse`, `DocumentStateChangeResponse`. All snake_case fields with camelCase aliases via `_Base.model_config = ConfigDict(extra="ignore", populate_by_name=True)`.
+
+### Tests added (28 in total)
+- `tests/unit/test_submissions.py` (16 tests): enum values, `build_submission_payload` helper (XML/JSON auto-detect, bytes input, explicit-format override, raw-string format accepted), `submit_documents` body shape + typed response, inline-dict documents accepted, rejection parsing, empty-list guard, content-type header, `get_submission` typed response incl. Decimal totals + pagination + default-param omission, `client.submissions` cached.
+- `tests/unit/test_document_state.py` (12 tests): enum values, cancel happy path + payload, default reason `""`, reason-len guard, reject happy path + payload, generic `set_document_state` (enum + lowercase-string inputs + unknown-status guard + reason-len guard), server-side `error` block passthrough, 400 -> `ValidationError`.
+
+### Notable design notes
+- `DocumentSummary.totals` is the only place Pydantic-fan-out was needed: the four camelCase `total*` keys ride at the row's top level per the LHDN doc, but for ergonomics we group them under a `totals` block with `Decimal`-typed fields. A `@model_validator(mode="before")` reshapes the dict before field-validation runs.
+- `build_submission_payload` accepts both `bytes` and `str` content (str is UTF-8 encoded internally) — mirrors PHP `MyInvoisHelper::getInternalSubmitDocument` which dealt with strings throughout.
+- The SubmissionsService path constant is `{BASE_PATH}/` (with trailing slash) matching the LHDN doc's URL signature; tests must mock `_BASE + "/"` for POST.
+- Phase 5 deliberately does NOT yet include the QR-Code URL builder (`generateDocumentQrCodeUrl` in PHP); that lives in a future "polish" phase alongside any remaining read endpoints (the basic `getDocument` with `uuid`/metadata is already covered by Phase 2's `get_raw`/`get_details`).
