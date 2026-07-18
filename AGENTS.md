@@ -133,6 +133,14 @@ Phases 0-5 done and committed. 260 tests passing (up from 232). `ruff check`, `r
 ## VERSION_CONTROL_STATUS
 Phase 4 commit = `9ce6d48` on `master`. Phase 5 commit = `f4327a1` on `master` (note: branch is `master` not `main`). 33 files tracked as of Phase 3a; Phase 4 + Phase 5 added more.
 
+## GITHUB
+Repo: **https://github.com/danieyal/myinvois-python** (public).
+Remote `origin` → `https://github.com/danieyal/myinvois-python.git`. Default branch is `master`. Topics: `myinvois`, `lhdn`, `e-invoice`, `malaysia`, `python`, `pydantic`, `ubl`, `xades`, `digital-signature`, `sdk`.
+
+CI (TODO when added): `.github/workflows/ci.yml` running `uv run ruff check . && uv run ruff format --check . && uv run mypy src/myinvois && uv run pytest`. Release automation (TODO): GitHub Actions Trusted Publishing → PyPI on tag `v*`.
+
+Test-only signing fixtures `tests/fixtures/cert/dummy_signing_{cert,key}.pem` are intentionally force-tracked (see `tests/fixtures/cert/README.md`): the Phase 4 byte-parity tests pin against PHP-generated goldens that were signed with this exact self-signed dummy keypair.
+
 ## CHANGES
 - `pyproject.toml` has `[tool.uv.build-backend]` `data-includes` shipping `py.typed` + `_data/*.json` (PEP 561 marker). Codes symbols re-exported from top-level `myinvois/__init__.py`.
 
