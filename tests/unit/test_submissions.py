@@ -320,6 +320,41 @@ def test_get_submission_defaults_page_no_and_size_omitted(
     assert "pageSize" not in captured["url"]
 
 
+def test_get_submission_populates_error_block_on_logical_rejection(
+    client: MyInvoisClient, respx_mock: Any
+) -> None:
+    """LHDN can return HTTP 200 with only an ``error`` block for logical rejections
+    (e.g. ``OperationPeriodOver``). The response model must surface it."""
+    respx_mock.get(_BASE + "/REJECTED1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "error": {
+                    "code": "OperationPeriodOver",
+                    "message": "The operation period is over.",
+                    "target": "submissionUid",
+                    "details": [{"code": "InClause", "message": "n/a"}],
+                }
+            },
+        )
+    )
+    response = client.submissions.get_submission("REJECTED1")
+    assert isinstance(response, GetSubmissionResponse)
+    assert response.submission_uid is None  # not present in error-only response
+    assert response.error is not None
+    assert response.error.code == "OperationPeriodOver"
+    assert response.error.message == "The operation period is over."
+    assert len(response.error.details) == 1
+
+
+def test_get_submission_rejects_empty_payload() -> None:
+    """An empty 200 body should not silently produce a valid response."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        GetSubmissionResponse.model_validate({})
+
+
 # -------- raw-bytes fallback -------------------------------------------------
 
 
