@@ -1,6 +1,6 @@
 """Document-submission service — Phase 5 write endpoints.
 
-Endpoints (mirrors the PHP SDK ``DocumentSubmissionService``):
+Endpoints:
 
 - ``POST /api/v1.0/documentsubmissions/`` — submit one or more signed UBL
   documents. Returns HTTP 202 with the submission UID plus accepted/rejected
@@ -86,8 +86,8 @@ class SubmissionOverallStatus(StrEnum):
 def _looks_like_json(content: bytes) -> bool:
     """``True`` if ``content`` decodes-and-parses as JSON, ``False`` otherwise.
 
-    Matches PHP ``MyInvoisHelper::isJson()`` semantics: any leading whitespace
-    stripped, then ``json.loads`` succeeds without raising.
+    Any leading whitespace is stripped, then ``json.loads`` succeeds
+    without raising.
     """
     try:
         json.loads(content)
@@ -104,16 +104,12 @@ def build_submission_payload(
 ) -> dict[str, str]:
     """Build the ``documents[]`` entry dict for a ``POST /documentsubmissions`` body.
 
-    Mirrors PHP ``MyInvoisHelper::getSubmitDocument($codeNumber, $content)`` /
-    the 3-arg variant ``getSubmitDocument($format, $codeNumber, $content)``.
-
     - ``content``: the (signed) UBL document, as ``bytes`` or ``str``. Used
       verbatim for both the ``base64.encode(document)`` field and the
-      ``sha256(document)`` *hex* hash that LHDN expects (PHP ``MyInvoisHelper::getHash``
-      returns lowercase hex via ``hash('sha256', ...)``).
+      ``sha256(document)`` *hex* hash that LHDN expects (lowercase hex).
     - ``format``: optional explicit override (``"XML"`` / ``"JSON"``); when
       ``None`` (default) it is inferred from the content's first non-whitespace
-      character (``{`` / ``[`` -> JSON, otherwise XML — same heuristic as PHP).
+      character (``{`` / ``[`` -> JSON, otherwise XML).
     """
     raw = content.encode("utf-8") if isinstance(content, str) else content
     if format is None:

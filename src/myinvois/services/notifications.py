@@ -1,6 +1,6 @@
 """Notifications service — query for previously sent notifications.
 
-Endpoint (from PHP SDK NotificationService):
+Endpoint:
 - GET /api/v1.0/notifications/taxpayer
 """
 

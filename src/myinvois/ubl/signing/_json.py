@@ -1,9 +1,8 @@
 """``JsonSigner`` — XAdES-enveloped RSA-PKCS1v15-SHA256 JSON signer for UBL
 invoices.
 
-Produces byte-for-byte parity with PHP's ``JsonDocumentBuilder::signDocument``
-output (verified against the golden fixture
-``tests/fixtures/golden_invoice_signed.json``).
+Produces the canonical LHDN-signed JSON wire form (verified against the
+golden fixture ``tests/fixtures/golden_invoice_signed.json``).
 
 Pipeline:
 
@@ -13,18 +12,15 @@ Pipeline:
 4. Compute ``cert_digest`` = ``base64(SHA256(cert_der_bytes))``.
 5. Compute ``props_digest`` = PropsDigest of the QualifyingProperties dict
    (see ``_propsdigest_json``).
-6. Build the JSON signature deep-dict mirroring PHP
-   ``SignatureInformation::jsonSerialize``, ``Signature::jsonSerialize``,
-   ``KeyInfo::jsonSerialize``, etc.
+6. Build the canonical JSON signature deep-dict.
 7. Splice ``"UBLExtensions"`` (at the head) and ``"Signature"`` (after
    ``DocumentCurrencyCode``) into the Invoice's JSON dict.
 8. Flip ``InvoiceTypeCode.listVersionID`` "1.0" -> "1.1".
 9. ``str_replace`` Reference2's ``Type`` attribute string
    ``http://www.w3.org/2000/09/xmldsig#SignatureProperties`` ->
-   ``http://uri.etsi.org/01903/v1.3.2#SignedProperties`` (PHP hard-coded).
-10. ``json.dumps`` with PHP's
-    ``json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)`` semantics
-    (``separators=(",",":")`` + ``ensure_ascii=False``), then strip ``\\r\\n``.
+   ``http://uri.etsi.org/01903/v1.3.2#SignedProperties`` (hard-coded).
+10. ``json.dumps`` with canonical-JSON semantics (``separators=(",",":")`` +
+    ``ensure_ascii=False``; forward slashes not escaped), then strip ``\\r\\n``.
 """
 
 from __future__ import annotations
@@ -49,7 +45,7 @@ from ._propsdigest_json import compute_props_digest_json
 if TYPE_CHECKING:
     from myinvois.config import CertConfig
 
-# Constants from PHP ``UblSpecifications`` (default invoice-level signature scope).
+# Invoice-level signature scope URNs (UBL 2.1 signature spec defaults).
 _SIGN_ID = "urn:oasis:names:specification:ubl:signature:1"
 _REFERENCED_SIG_ID = "urn:oasis:names:specification:ubl:signature:Invoice"
 _SIG_METHOD_URN = "urn:oasis:names:specification:ubl:dsig:enveloped:xades"
@@ -64,20 +60,16 @@ def _format_signing_time(signing_time: datetime) -> str:
     """Format ``signing_time`` as ``Y-m-d\\TH:i:s\\Z``.
 
     e.g. ``2024-01-15T10:00:00Z``. Pinned to UTC; seconds resolution only
-    (no microseconds). Mirrors PHP's
-    ``$dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\\TH:i:s\\Z')``.
+    (no microseconds).
     """
     if signing_time.tzinfo is None:
         raise ValueError("signing_time must be timezone-aware (use datetime(..., tzinfo=UTC))")
     return signing_time.astimezone().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _json_encode_php(content: Any) -> str:
-    """Encode as PHP ``json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)``.
-
-    PHP's default ``json_encode`` produces no whitespace; replicate via
-    ``separators=(",", ":")``. ``JSON_UNESCAPED_UNICODE`` =>
-    ``ensure_ascii=False``. ``JSON_UNESCAPED_SLASHES`` is Python's default.
+def _json_encode_canonical(content: Any) -> str:
+    """Encode in the canonical JSON wire form: no whitespace, no Unicode
+    escapes, forward slashes not backslash-escaped.
     """
     return json.dumps(content, separators=(",", ":"), ensure_ascii=False)
 
@@ -95,9 +87,7 @@ class JsonSigner:
     # -- public API -------------------------------------------------------
 
     def sign(self, document: bytes | str, *, signing_time: datetime) -> str:
-        """Return the signed JSON document as a string (byte-for-byte parity
-        with the PHP-generated fixture).
-        """
+        """Return the signed JSON document as a string (canonical LHDN wire form)."""
         if isinstance(document, str):
             document_bytes = document.encode("utf-8")
         else:
@@ -137,7 +127,7 @@ class JsonSigner:
         invoice = tree["Invoice"][0]
         if "UBLExtensions" in invoice:
             raise ValueError("Document has already been signed")
-        # Insert UBLExtensions at the very front of Invoice dict (PHP read).
+        # Insert UBLExtensions at the very front of the Invoice dict.
         new_invoice: dict[str, Any] = {"UBLExtensions": [_build_ubl_extensions_outer(sig_dict)]}
         # Maintain field order: keys before Signature are inserted in their
         # original order, then Signature goes after DocumentCurrencyCode, then
@@ -159,11 +149,11 @@ class JsonSigner:
         tree["Invoice"][0] = new_invoice
 
         # Final encoding.
-        encoded = _json_encode_php(tree)
-        # Strip any \r\n (PHP also does str_replace(array("\r","\n"), '', $content)).
+        encoded = _json_encode_canonical(tree)
+        # Strip any \r\n line breaks.
         encoded = encoded.replace("\r", "").replace("\n", "")
         # Final flip of Reference2.Type from ds:SignatureProperties to
-        # xades:SignedProperties (PHP hard-coded str_replace at end of build()).
+        # xades:SignedProperties (hard-coded str_replace at end of build()).
         encoded = encoded.replace(
             f'"Type":"{_REF2_TYPE_PRE_REWRITE}"',
             f'"Type":"{_REF2_TYPE_POST_REWRITE}"',
@@ -203,7 +193,7 @@ class JsonSigner:
 
 
 # ---------------------------------------------------------------------------
-# Deep dict builders — mirror PHP's jsonSerialize for each Extension class.
+# Deep dict builders — emit the canonical JSON signature structure.
 # ---------------------------------------------------------------------------
 
 
@@ -218,9 +208,7 @@ def _build_signature_json_dict(
     signing_time_str: str,
     cert_pem_raw: str,
 ) -> dict[str, Any]:
-    """Build the ``Signature`` sub-dict as emitted by
-    ``Signature::jsonSerialize``.
-    """
+    """Build the canonical ``Signature`` sub-dict."""
     signed_info = {
         "SignatureMethod": [{"_": "", "Algorithm": _SIGNATURE_METHOD_ALGORITHM}],
         "Reference": [
@@ -301,7 +289,7 @@ def _build_signature_json_dict(
 
 
 def _build_signature_information_json(signature: dict[str, Any]) -> dict[str, Any]:
-    """Mirror ``SignatureInformation::jsonSerialize``."""
+    """Build the ``SignatureInformation`` dict."""
     return {
         "ID": [{"_": _SIGN_ID}],
         "ReferencedSignatureID": [{"_": _REFERENCED_SIG_ID}],
@@ -310,7 +298,7 @@ def _build_signature_information_json(signature: dict[str, Any]) -> dict[str, An
 
 
 def _build_ubl_document_signatures_json(signature: dict[str, Any]) -> dict[str, Any]:
-    """``UBLDocumentSignatures::jsonSerialize``."""
+    """Build the ``UBLDocumentSignatures`` dict."""
     return {
         "UBLDocumentSignatures": [
             {"SignatureInformation": [_build_signature_information_json(signature)]}
@@ -319,7 +307,7 @@ def _build_ubl_document_signatures_json(signature: dict[str, Any]) -> dict[str, 
 
 
 def _build_ubl_extension_item_json(signature: dict[str, Any]) -> dict[str, Any]:
-    """``UBLExtensionItem::jsonSerialize``."""
+    """Build the ``UBLExtensionItem`` dict."""
     return {
         "ExtensionURI": [{"_": _SIG_METHOD_URN}],
         "ExtensionContent": [_build_ubl_document_signatures_json(signature)],
@@ -327,16 +315,13 @@ def _build_ubl_extension_item_json(signature: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_ubl_extensions_outer(signature: dict[str, Any]) -> dict[str, Any]:
-    """``UBLExtensions::jsonSerialize`` (outer wrapper around the list)."""
+    """Build the ``UBLExtensions`` outer wrapper around the list."""
     return {"UBLExtension": [_build_ubl_extension_item_json(signature)]}
 
 
 def _build_signature_sibling() -> dict[str, Any]:
-    """Mirror PHP ``Invoice::jsonSerialize['Signature'][]`` sibling.
-
-    The two-element dict emitted by ``Invoice::jsonSerialize`` when
-    UBLExtensions have been attached (see lines 878-892 of
-    ``src/Ubl/Invoice.php``).
+    """Build the two-element ``Signature`` sibling the Invoice emits when
+    UBLExtensions have been attached.
     """
     return {
         "ID": [{"_": _REFERENCED_SIG_ID}],
@@ -347,10 +332,7 @@ def _build_signature_sibling() -> dict[str, Any]:
 def _flip_invoice_type_code_list_version_id(
     invoice_type_code_entries: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Flip ``listVersionID`` from ``"1.0"`` to ``"1.1"``
-    (mirrors PHP ``XmlDocumentBuilder::signDocument``'s hard-coded str_replace
-    of ``cbc:InvoiceTypeCode listVersionID="1.0"``).
-    """
+    """Flip ``listVersionID`` from ``"1.0"`` to ``"1.1"``."""
     out = []
     for entry in invoice_type_code_entries:
         new_entry = dict(entry)

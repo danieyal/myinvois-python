@@ -1,16 +1,14 @@
 """Digital-signing utilities for the MyInvois / LHDN e-Invoice SDK.
 
-This subpackage mirrors PHP's ``AbstractDocumentBuilder::signDocument``
-logic: it accepts an unsigned UBL document (bytes/str for XML, dict for
-JSON), resolves the supplied certificate bundle, computes the four
-cryptographic primitives needed by XAdES (Reference1 DocDigest, Reference2
-PropsDigest, CertDigest, SignatureValue), and stitches the full
-``ext:UBLExtensions`` / ``cac:Signature`` block back into the serialized
-document.
+This subpackage implements the XAdES signing pipeline for UBL invoices: it
+accepts an unsigned UBL document (bytes/str for XML, dict for JSON), resolves
+the supplied certificate bundle, computes the four cryptographic primitives
+needed by XAdES (Reference1 DocDigest, Reference2 PropsDigest, CertDigest,
+SignatureValue), and stitches the full ``ext:UBLExtensions`` /
+``cac:Signature`` block back into the serialized document.
 
 For JSON, the equivalent sibling structure is the ``"UBLExtensions"`` /
-``"Signature"`` keys inserted directly into the Invoice's JSON dictionary
-(per PHP ``JsonDocumentBuilder::build`` + ``Invoice::jsonSerialize``).
+``"Signature"`` keys inserted directly into the Invoice's JSON dictionary.
 
 Public surface:
 

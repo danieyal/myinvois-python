@@ -2,9 +2,8 @@
 
 This is the mainstream `Invoice` document the LHDN MyInvois system accepts.
 Inherits UBL field naming structure; `Invoice.model_dump(by_alias=True,
-exclude_none=True)` produces the exact nested structure the PHP SDK's
-`Invoice::jsonSerialize()` method emits, ready for the Phase 3c envelope
-builder to wrap.
+exclude_none=True)` produces the canonical nested structure, ready for
+the envelope builder to wrap.
 """
 
 from __future__ import annotations
@@ -42,9 +41,8 @@ class Invoice(_UblModel):
     * `legal_monetary_total`, `tax_total`, `invoice_lines >= 1`.
     """
 
-    # Canonical UBL XML tag name (matches PHP ``Invoice::$xmlTagName`` and the
-    # ``_D`` namespace URI used in the JSON envelope). Phase 3c's
-    # ``JsonEnvelopeBuilder`` reads this to set the outer key + default-namespace URL.
+    # Canonical UBL XML tag name. The envelope builders read this to set
+    # the outer key + default-namespace URL.
     xml_tag_name: ClassVar[str] = "Invoice"
 
     id: str = Field(serialization_alias="ID")
@@ -145,9 +143,7 @@ class Invoice(_UblModel):
         return self
 
     def _require_core_fields(self) -> None:
-        """Enforce the PHP Invoice.validate() required set (and stricter
-        finance-library requirements: no silent zero-fill on tax_total /
-        accounting_customer_party)."""
+        """Enforce required core invoice fields (no silent zero-fill)."""
         required: list[tuple[object, str]] = [
             (self.id, "id"),
             (self.issue_date_time, "issue_date_time"),
@@ -165,8 +161,7 @@ class Invoice(_UblModel):
 
     def _stamp_document_currency(self) -> None:
         """Stamp the document's currency_code into every per-amount currency_id
-        attribute (matches PHP SDK's `CurrencyCodes::MYR` default attribute
-        behaviour, where the document_currency_code overrides)."""
+        attribute (defaults to MYR when unset)."""
         cid = (
             self.document_currency_code.value
             if isinstance(self.document_currency_code, Currency)
@@ -253,7 +248,7 @@ class Invoice(_UblModel):
         if self.buyer_reference is not None:
             out["BuyerReference"] = _leaf(self.buyer_reference)
 
-        # Optional submodel block (preserves PHP elision + write order).
+        # Optional submodel block (preserves elision + write order).
         opt_blocks: dict[str, Any] = {
             "InvoicePeriod": _dl(self.invoice_period),
             "OrderReference": _dl(self.order_reference),
@@ -288,7 +283,7 @@ class Invoice(_UblModel):
                 "TaxExchangeRate": _dl(self.tax_exchange_rate),
             }
         )
-        # Emit the optional blocks in PHP write-order.
+        # Emit the optional blocks in canonical write-order.
         for key in (
             "InvoicePeriod",
             "OrderReference",

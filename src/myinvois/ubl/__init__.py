@@ -4,9 +4,8 @@ This subpackage models the canonical LHDN JSON envelope's body — i.e. the
 nested UBL structure with leaves as `{"_": value, **attrs}` — ready to be
 wrapped by the Phase 3c envelope builder.
 
-The representations are aligned to the PHP SDK (`Klsheng\\Myinvois\\Ubl\\*`)
-`jsonSerialize()` methods so signatures computed downstream (Phase 4) match
-the SDK byte-for-byte.
+The representations produce the canonical wire form so signatures computed
+downstream (Phase 4) match server-side.
 """
 
 from __future__ import annotations

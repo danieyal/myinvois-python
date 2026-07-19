@@ -4,7 +4,7 @@ Phase 2 covers read endpoints. The cancel/reject PUT-state changes (Phase 5)
 live on the same service (matching the LHDN API URL family
 ``/api/v1.0/documents/...``).
 
-Endpoints (from PHP SDK DocumentService + the LHDN API docs):
+Endpoints:
 - GET  /api/v1.0/documents/{uuid}/raw        : source XML/JSON + metadata
 - GET  /api/v1.0/documents/{uuid}/details     : full doc + validation results
 - GET  /api/v1.0/documents/recent             : recent (last 30 days), paginated
@@ -287,7 +287,7 @@ class DocumentsService:
     #: Spec: https://sdk.myinvois.hasil.gov.my/einvoicingapi/03-cancel-document/
     #: The official doc limits ``reason`` to 300 characters; reason becomes
     #: mandatory when cancelling (an empty string is permitted by the wire,
-    #: matching the PHP SDK's default of ``''``).
+    #: matching the LHDN API default of ``''``).
     REASON_MAX_LEN: int = 300
     _STATE_PATH = "/api/v1.0/documents/state"
 

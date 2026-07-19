@@ -1,16 +1,15 @@
-"""JSON PropsDigest helper — replicates ``JsonDocumentBuilder::getPropsDigestHash``.
+"""JSON PropsDigest helper.
 
-Produces the SHA-256-base64 hash over the ``json_encode(QualifyingProperties,
-JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)`` byte sequence.
+Produces the SHA-256-base64 hash over the canonical QualifyingProperties JSON
+byte sequence.
 
-PHP semantics:
+Canonical JSON encoding rules:
 
-* ``json_encode`` default has no whitespace → Python ``separators=(",", ":")``.
-* ``JSON_UNESCAPED_UNICODE`` → Python ``ensure_ascii=False``.
-* ``JSON_UNESCAPED_SLASHES`` → default in Python (``/`` is NOT backslash-escaped).
+* No whitespace → Python ``separators=(",", ":")``.
+* Non-ASCII passes through literally → Python ``ensure_ascii=False``.
+* Forward slashes are NOT backslash-escaped (the default in Python).
 
-The QualifyingProperties JSON structure (mirrored from PHP
-``QualifyingProperties::jsonSerialize``)::
+The QualifyingProperties JSON structure (the canonical LHDN wire form)::
 
     {
       "Target": "signature",
@@ -53,9 +52,8 @@ def compute_props_digest_json(
 ) -> str:
     """Return the base64-encoded SHA-256 of the QualifyingProperties JSON.
 
-    The bytes-to-hash are emitted with PHP's
-    ``json_encode($qp, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)`` semantics
-    (no whitespace, no Unicode escapes, no slash backslash-escapes).
+    The bytes-to-hash are emitted with canonical-JSON semantics: no
+    whitespace, no Unicode escapes, no slash backslash-escapes.
     """
     qp = _build_qualifying_properties_dict(
         issuer_name=issuer_name,
@@ -77,7 +75,7 @@ def _build_qualifying_properties_dict(
     cert_digest_b64: str,
     signing_time_str: str,
 ) -> dict[str, Any]:
-    """Mirror PHP ``QualifyingProperties::jsonSerialize`` exactly."""
+    """Build the canonical QualifyingProperties JSON dict."""
     return {
         "Target": "signature",
         "SignedProperties": [

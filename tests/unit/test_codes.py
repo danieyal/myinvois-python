@@ -1,7 +1,7 @@
 """Tests for myinvois.codes — LHDN enumerated code tables.
 
 All tables are loaded lazily from JSON data packaged with the library
-(extracted from the official PHP SDK Constant/*.php via
+(extracted from reference code tables via
 ``scripts/extract_codes.py``). The small / curated tables (Malaysian states,
 tax types, payment means, document types, currency) are also exposed as
 ``StrEnum`` members; the larger tables (classification, country, MSIC, unit)

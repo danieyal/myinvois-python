@@ -1,8 +1,8 @@
 """Taxpayer service — TIN validation, TIN search, and QR-code lookup.
 
-Endpoints (from PHP SDK TaxPayerService / TaxPayersService):
+Endpoints:
 - GET /api/v1.0/taxpayer/validate/{tin}?idType&idValue
-    Per PHP comments: an empty 200 body means the TIN is valid; an error body
+    An empty 200 body means the TIN is valid; an error body
     means invalid. We translate that into a boolean.
 - GET /api/v1.0/taxpayer/search/tin?...   : search for a TIN by name or id
 - GET /api/v1.0/taxpayers/qrcodeinfo/{qr} : taxpayer info from QR code
@@ -57,9 +57,8 @@ class TaxpayerService:
     ) -> bool:
         """Validate a Tax Identification Number before issuing an invoice.
 
-        Returns ``True`` when the LHDN API accepts the TIN/id pair (per the
-        PHP SDK: an empty 200 body means valid; an error payload means not
-        valid).
+        Returns ``True`` when the LHDN API accepts the TIN/id pair.
+        An empty 200 body means valid; an error payload means not valid.
         """
         params = {"idType": _coerce_id_type(id_type), "idValue": id_value}
         raw = self._client.request("GET", f"{self.BASE_PATH}/validate/{tin}", params=params)

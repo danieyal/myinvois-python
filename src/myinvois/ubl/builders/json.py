@@ -1,4 +1,4 @@
-"""PHP-canonical JSON envelope builder for the LHDN MyInvois wire form.
+"""Canonical JSON envelope builder for the LHDN MyInvois wire form.
 
 The renderer is hand-rolled rather than slaved to Python's ``json.dumps``
 because the canonical LHDN form has two requirements that ``json.dumps``
@@ -7,23 +7,20 @@ cannot satisfy:
 1. **Every keyed element inside the document content is wrapped as a
    one-or-more-element JSON array.** This includes singletons (e.g.
    ``"IssueDate": [{"_": "2024-06-14"}]``) and structural submodels
-   (e.g. ``"TaxTotal": [{...}]``). The PHP SDK serializes everything via
-   ``$arrays['X'][] = $items`` and the TypeScript ``myinvois-client`` types
-   it the same way (``UBLJsonText = UBLJsonValue<string>[]``).
+   (e.g. ``"TaxTotal": [{...}]``).
 
-2. **Money renders as JSON *numbers* in PHP's float-printing style.**
+2. **Money renders as JSON *numbers* in a compact float style.**
    ``Decimal("1460.50")`` -> ``1460.5``; ``Decimal("1500.00")`` -> ``1500``
-   (no `.0`); ``Decimal("0.30")`` -> ``0.3``. Python's ``repr(float)``
-   matches PHP's ``json_encode`` for the non-integer case but emits
-   ``1500.0`` for integer-valued floats while PHP emits ``1500``. The
-   ``_number.format_as_php_float_token`` helper handles this consistently.
+   (no ``.0``); ``Decimal("0.30")`` -> ``0.3``. Python's ``repr(float)`` has
+   the same shape for the non-integer case but emits ``1500.0`` for
+   integer-valued floats. The
+   ``_number.format_canonical_json_amount`` helper handles this consistently.
 
-Output is byte-identical to the PHP SDK's ``JsonDocumentBuilder::build()``
-output modulo formatting whitespace (compact, no escapes, no slashes
-escapes — matches ``JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES``).
-Phase 4's signature digest operates on this exact string; do NOT edit any
-formatting choice without regenerating the LHDN canonical-form Golden test
-fixtures.
+Output is byte-identical to the canonical LHDN-conformant form (compact,
+no escapes, no slash escapes — equivalent to
+``JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES``). Phase 4's signature
+digest operates on this exact string; do NOT edit any formatting choice
+without regenerating the golden test fixtures.
 """
 
 from __future__ import annotations
@@ -31,7 +28,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from ._number import format_as_php_float_token
+from ._number import format_canonical_json_amount
 from ._specs import ENVELOPE_DOCUMENT_TAGS, UBL_NAMESPACES
 
 __all__ = ["JsonEnvelopeBuilder"]
@@ -83,8 +80,7 @@ class JsonEnvelopeBuilder:
     # ------------------------------------------------------------------
 
     def _document_tag_name(self) -> str:
-        # PHP base class sets ``Invoice::$xmlTagName = 'Invoice'`` on top-level
-        # document classes. We accept any model with the same convention.
+        # Top-level document classes carry ``xml_tag_name`` (e.g. ``"Invoice"``).
         return getattr(self._invoice, "xml_tag_name", "Invoice")
 
     def _document_tag(self) -> str:
@@ -105,19 +101,18 @@ class JsonEnvelopeBuilder:
 
     def _content_dump(self) -> dict[str, Any]:
         # `Invoice.model_dump(by_alias=True, exclude_none=True)` returns the
-        # per-class `_ser` dict already aligned to PHP keyspace — leaves are
-        # `{"_": value, attrs...}` dicts and repeatables are lists-of-dicts.
+        # per-class `_ser` dict already aligned to the canonical keyspace —
+        # leaves are `{"_": value, attrs...}` dicts and repeatables are
+        # lists-of-dicts.
         dump = self._invoice.model_dump(by_alias=True, exclude_none=True)
         return dump if isinstance(dump, dict) else dict(dump)
 
     # ------------------------------------------------------------------
-    # Currency stamping (mirrors PHP AbstractDocumentBuilder CURRENCY_ID injection)
+    # Currency stamping (default currencyID = document currency)
     # ------------------------------------------------------------------
 
     # Every amount-bearing leaf-form dict we recognize by attribute name. If
     # the leaf has no `currencyID` set, default it to the document currency.
-    # Mirrors PHP: tax_amount_attributes/paid_amount_attributes/etc. default
-    # the attribute to the documentCurrencyCode when the caller didn't set it.
     _AMOUNT_LEAF_ATTR_FIELDS: tuple[str, ...] = (
         "tax_amount",
         "taxable_amount",
@@ -161,7 +156,7 @@ class JsonEnvelopeBuilder:
                 self._stamp_currency(e, currency)
 
     # ------------------------------------------------------------------
-    # Array-form wrapping (PHP ``$arrays['X'][] = ...`` semantics)
+    # Array-form wrapping
     # ------------------------------------------------------------------
 
     def _wrap_array_form(self, node: Any) -> Any:
@@ -193,22 +188,21 @@ class JsonEnvelopeBuilder:
                         # Structural submodel — recurse then wrap.
                         result[k] = [self._wrap_array_form(v)]
                 else:
-                    # Primitive — PHP always wraps in array; produce `[v]`.
+                    # Primitive — wrap as array-of-one.
                     result[k] = [v]
             return result
         # Primitive at top-level (unexpected for content dump) — pass through.
         return node
 
     # ------------------------------------------------------------------
-    # JSON renderer (PHP-compatible compact serialiser)
+    # JSON renderer (compact serialiser)
     # ------------------------------------------------------------------
 
     def _render(self, node: Any) -> str:
         # Use a sentinel-aware compact renderer: handles Decimal as a JSON
-        # number token via format_as_php_float_token, emits dicts/lists/strs/
-        # bools/None/int per Python json semantics (matches PHP for these),
-        # Unicode passthrough (ensure_ascii=False), and forwards slashes
-        # unescaped (`JSON_UNESCAPED_SLASHES`).
+        # number token via format_canonical_json_amount, emits
+        # dicts/lists/strs/bools/None/int per Python json semantics, Unicode
+        # passthrough (ensure_ascii=False), and forwards slashes unescaped.
         out: list[str] = []
         self._serialize(node, out)
         return "".join(out)
@@ -226,7 +220,7 @@ class JsonEnvelopeBuilder:
             out.append(self._render_string(node))
             return
         if isinstance(node, Decimal):
-            out.append(format_as_php_float_token(node))
+            out.append(format_canonical_json_amount(node))
             return
         if isinstance(node, float):
             s = repr(node)
@@ -257,11 +251,10 @@ class JsonEnvelopeBuilder:
             f"unsupported JSON node type: {type(node)!r}"
         )  # pragma: no cover - defensive
 
-    # Cache for JSON string escapes. PHP JSON_UNESCAPED_UNICODE means non-ASCII
-    # characters are emitted literally (Python matches via ensure_ascii=False).
-    # JSON_UNESCAPED_SLASHES means forward slashes are NOT escaped (Python
-    # doesn't escape them by default either). The only required escapes are
-    # the JSON-grammar-mandatory ones.
+    # Cache for JSON string escapes. The canonical form emits non-ASCII
+    # characters literally and does not escape forward slashes (Python matches
+    # via ensure_ascii=False, and doesn't escape ``/`` by default). The only
+    # required escapes are the JSON-grammar-mandatory ones.
     @staticmethod
     def _render_string(s: str) -> str:
         # Use json.dumps with ensure_ascii=False for the canonical escape set

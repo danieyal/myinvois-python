@@ -1,14 +1,14 @@
-"""XML PropsDigest helper — replicates ``XmlDocumentBuilder::getPropsDigestHash``.
+"""XML PropsDigest helper.
 
-Produces the SHA-256-base64 hash of the *SignedProperties* subtree (with five
-``xmlns:ds`` / ``xmlns:xades`` declarations injected to keep parity with the
-PHP ``str_replace``-based ``replaceCommonAttributes`` step).
+Produces the SHA-256-base64 hash of the *SignedProperties* subtree, with five
+``xmlns:ds`` / ``xmlns:xades`` declarations injected (the canonical
+common-attribute replacement pass) before hashing.
 
 Used both as:
 
 * ``Reference2.DigestValue`` in the final signed XML (the enqueued Promise digest);
 * the input hash for the propsDigest component computed during the digest
-  Yan ``SignerDigests`` aggregator.
+  ``SignerDigests`` aggregator.
 """
 
 from __future__ import annotations
@@ -18,13 +18,12 @@ import hashlib
 
 from ._common_attrs import replace_common_attributes
 
-# Namespace prefixes used by Sabre during the propsdigest block serialization.
+# Namespace prefixes used in the propsdigest block serialization.
 _DS_NS = "http://www.w3.org/2000/09/xmldsig#"
 _XADES_NS = "http://uri.etsi.org/01903/v1.3.2#"
 
-# The wrapper Sabre emits around the bare QualifyingProperties::xmlSerialize
-# output. ``$service->write('{xades-ns}root', $qp)`` during the getPropsDigestHash
-# step produces this wrapper, which is later stripped AFTER C14N.
+# The wrapper emitted around the bare QualifyingProperties serialization
+# during the propsdigest step. The wrapper is stripped AFTER C14N.
 _PROPSDIGEST_WRAPPER_OPEN = (
     '<xades:root xmlns:ds="http://www.w3.org/2000/09/xmldsig#"'
     ' xmlns:xades="http://uri.etsi.org/01903/v1.3.2#">'
@@ -41,10 +40,10 @@ def compute_props_digest_xml(
     cert_digest_b64: str,
     signing_time_str: str,
 ) -> str:
-    """Replicate ``XmlDocumentBuilder::getPropsDigestHash`` byte-for-byte.
+    """Compute the canonical PropsDigest hash byte-for-byte.
 
-    Returns the base64-encoded SHA-256 of the c14n'd 5-attribute-injected
-    ``<xades:SignedProperties>`` subtree.
+    Returns the base64-encoded SHA-256 of the c14n'd
+    5-attribute-injected ``<xades:SignedProperties>`` subtree.
     """
     props_xml = _build_signed_properties_xml(
         issuer_name=issuer_name,
@@ -61,9 +60,9 @@ def _build_signed_properties_xml(
     cert_digest_b64: str,
     signing_time_str: str,
 ) -> str:
-    """Build the ``<xades:SignedProperties>`` block as Sabre would emit it,
-    wrapped in the Sabre ``<xades:root>`` wrapper used during getPropsDigestHash
-    and *before* the canonicalization step.
+    """Build the ``<xades:SignedProperties>`` block in its canonical wire
+    form, wrapped in the ``<xades:root>`` wrapper used during the propsdigest
+    step and *before* the canonicalization step.
     """
     body = (
         f'<xades:SignedProperties Id="id-xades-signed-props">'
@@ -90,22 +89,18 @@ def _build_signed_properties_xml(
 def _hash_props_block(props_xml_with_wrapper: str) -> str:
     """C14N -> strip wrapper -> replace-common-attributes -> SHA256 -> base64."""
     canonicalized = _c14n(props_xml_with_wrapper)
-    # Strip the xades:root wrapper (now it has no xmlns:ds declaration
+    # Strip the xades:root wrapper (it has no xmlns:ds declaration left
     # after C14N pruned the redundant namespace).
     body = _strip_root_wrapper(canonicalized)
     # Apply the 5 xmlns-injection replacements.
     injected = replace_common_attributes(body)
-    # Strip whitespace control chars (PHP's behavior: hash the str_replace'd
-    # string verbatim).
+    # Hash the str_replace'd string verbatim.
     final_bytes = injected.encode("utf-8")
     return base64.b64encode(hashlib.sha256(final_bytes).digest()).decode("ascii")
 
 
 def _c14n(xml_string: str) -> str:
-    """Canonicalize XML using lxml (does NOT prune the redundant
-    ``xmlns:ds`` declaration present on the wrapper? verify behavior is
-    the same as PHP DOMDocument::C14N()).
-    """
+    """Canonicalize XML using lxml (canonical XML 1.1 form)."""
     from lxml import etree
 
     # Parse defensively — the wrapper root is a single element with two

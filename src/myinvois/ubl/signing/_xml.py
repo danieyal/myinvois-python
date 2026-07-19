@@ -1,12 +1,10 @@
 """``XmlSigner`` — XAdES-enveloped RSA-PKCS1v15-SHA256 XML signer for UBL
 invoices.
 
-Produces byte-for-byte parity with PHP's ``XmlDocumentBuilder::signDocument``
-output (verified against the golden fixture
-``tests/fixtures/golden_invoice_signed.xml``).
+Produces the canonical LHDN-signed XML wire form (verified against the golden
+fixture ``tests/fixtures/golden_invoice_signed.xml``).
 
-Pipeline (mirrors PHP ``AbstractDocumentBuilder::createSignature`` +
-``XmlDocumentBuilder::build`` invoked AFTER ``isSigned=true``):
+Pipeline:
 
 1. Resolve the ``CertConfig`` once into a ``LoadedCert`` byte bundle.
 2. Compute ``doc_digest`` = ``base64(SHA256(unsigned_xml_bytes))``.
@@ -20,12 +18,13 @@ Pipeline (mirrors PHP ``AbstractDocumentBuilder::createSignature`` +
    ``<cbc:DocumentCurrencyCode>...</cbc:DocumentCurrencyCode>``.
 8. Flip ``InvoiceTypeCode['listVersionID']`` from ``"1.0"`` to ``"1.1"``.
 
-NOTE: PHP applies ``replaceCommonAttributes`` and ``str_replace(["\\n","\\t","\\r"], ...)``
-on the final document, but these are no-ops once the UBLExtensions block
-template is emitted (per ``_xml_block``) with the 5 xmlns-injections already
-baked in, AND the envelope-builder output is whitespace-free to begin with.
-Byte-for-byte parity with the PHP golden fixture is retained without the
-final pass; the unit tests assert this invariant.
+NOTE: the canonical signed document additionally applies a common-attribute
+replacement pass and a whitespace strip on the final byte stream, but these
+are no-ops once the UBLExtensions block template is emitted (per
+``_xml_block``) with the 5 xmlns-injections already baked in, AND the
+envelope-builder output is whitespace-free to begin with. Byte-for-byte parity
+with the golden fixture is retained without the final pass; the unit tests
+assert this invariant.
 """
 
 from __future__ import annotations
@@ -52,11 +51,10 @@ if TYPE_CHECKING:
 
 
 def _format_signing_time(signing_time: datetime) -> str:
-    """Format ``signing_time`` as ``Y-m-d\\TH:i:s\\Z`` (PHP's literal escape).
+    """Format ``signing_time`` as ``Y-m-d\\TH:i:s\\Z``.
 
     e.g. ``2024-01-15T10:00:00Z``. Pinned to UTC; seconds resolution only
-    (no microseconds). Matches PHP's
-    ``$dt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\\TH:i:s\\Z')``.
+    (no microseconds).
     """
     utc = signing_time.astimezone()
     if utc.tzinfo is None:
@@ -78,9 +76,7 @@ class XmlSigner:
     # -- public API -------------------------------------------------------
 
     def sign(self, document: bytes | str, *, signing_time: datetime) -> bytes:
-        """Return the signed XML document as bytes (byte-for-byte parity
-        with the PHP-generated fixture).
-        """
+        """Return the signed XML document as bytes (canonical LHDN wire form)."""
         if isinstance(document, str):
             document_bytes = document.encode("utf-8")
         else:
@@ -112,8 +108,7 @@ class XmlSigner:
 
         text = document_bytes.decode("utf-8")
         # Sanity check that the document is unsigned (no UBLExtensions injected yet).
-        # PHP allows for a redundant idempotency re-sign, but we treat the second
-        # call as a programmer error here.
+        # Re-signing an already-signed document is treated as a programmer error.
         if "<ext:UBLExtensions>" in text:
             raise ValueError("Document has already been signed (contains <ext:UBLExtensions>)")
         # Splice the UBLExtensions block right after the opening <Invoice ...> tag.
@@ -123,7 +118,7 @@ class XmlSigner:
         text = text[:opening_tag_end] + ubl_extensions_block + text[opening_tag_end:]
 
         # Splice the <cac:Signature> sibling right after <cbc:DocumentCurrencyCode>
-        # (and not after InvoiceTypeCode — DocumentCurrencyCode is its next sibling per PHP).
+        # (and not after InvoiceTypeCode — DocumentCurrencyCode is its next sibling).
         cdc_marker = "</cbc:DocumentCurrencyCode>"
         cdc_idx = text.find(cdc_marker)
         if cdc_idx == -1:
@@ -131,7 +126,7 @@ class XmlSigner:
         cdc_end = cdc_idx + len(cdc_marker)
         text = text[:cdc_end] + build_cac_signature_block() + text[cdc_end:]
 
-        # Flip listVersionID="1.0" -> "1.1" (PHP's hard-coded mutation).
+        # Flip listVersionID="1.0" -> "1.1".
         text = text.replace('listVersionID="1.0"', 'listVersionID="1.1"')
 
         return text.encode("utf-8")

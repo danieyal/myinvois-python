@@ -1,26 +1,25 @@
-"""PHP-canonical UBL 2.1 XML envelope builder for LHDN MyInvois.
+"""Canonical UBL 2.1 XML envelope builder for LHDN MyInvois.
 
-Produces the SAME wire form as ``klsheng/myinvois-php-sdk``'s
-``XmlDocumentBuilder::build()`` — sabre/xml-driven UBL XML, then canonicalised
-with ``DOMDocument::C14N()`` (canonical XML 1.0, **inclusive**, no-comments).
+Produces the canonical wire form: UBL 2.1 XML, then canonicalised with
+inclusive C14N-1.0 (no-comments).
 
 This renderer **shares the per-class ``_ser`` dump** with
-:class:`~myinvois.ubl.builders.json.JsonEnvelopeBuilder`; the model_dump dict
-is the single source of truth for both forms. The XML builder just:
+:class:`~myinvois.ubl.builders.json.JsonEnvelopeBuilder`; the model_dump
+dict is the single source of truth for both forms. The XML builder just:
 
 1. Walks the dump and emits lxml elements with the correct namespace prefix
    (cbc/cac/ext/none) per :data:`_prefixes.ELEMENT_PREFIXES`.
-2. Renders amount ``_`` leaves with :func:`_number.format_as_php_xml_token`
-   (PHP's ``number_format($value, 2, '.', '')`` — two decimal places, trailing
-   zeros preserved); other leaves render as their natural string form.
+2. Renders amount ``_`` leaves with
+   :func:`_number.format_canonical_xml_amount`
+   (two decimal places, trailing zeros preserved); other leaves render as
+   their natural string form.
 3. Stamps the document currency onto every amount's ``currencyID`` attribute
    (same logic as the JSON builder).
 4. Feeds the lxml tree back into ``etree.tostring(method='c14n',
    exclusive=False, with_comments=False)`` — inclusive canonicalisation
-   (matches PHP ``DOMDocument::C14N()`` default args) which keeps the four
-   xmlns declarations on the root invoice element exactly as the LHDN
-   server compares. Phase 4's XAdES-ENVELOPED signature digest will run the
-   same canonicaliser on the signed Invoice subtree.
+   which keeps the four xmlns declarations on the root invoice element
+   exactly as the LHDN server compares. Phase 4's XAdES-ENVELOPED signature
+   digest runs the same canonicaliser on the signed Invoice subtree.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ from xml.sax.saxutils import escape as _xml_escape
 
 from lxml import etree
 
-from ._number import format_as_php_xml_token
+from ._number import format_canonical_xml_amount
 from ._prefixes import ELEMENT_PREFIXES
 from ._specs import UBL_NAMESPACES
 
@@ -50,10 +49,9 @@ class XmlEnvelopeBuilder:
         builder = XmlEnvelopeBuilder(invoice)
         s = builder.build_xml()  # canonical XML 1.0 (inclusive), str
 
-    The output is **byte-identical** to the PHP SDK's
-    ``XmlDocumentBuilder::build()`` (C14N-canonical, no XML declaration,
-    no inter-element whitespace), so Phase 4's signature digests match
-    server-side.
+    The output is the canonical LHDN-accepted form (C14N-canonical, no XML
+    declaration, no inter-element whitespace), so Phase 4's signature
+    digests match server-side.
     """
 
     __slots__ = ("_invoice",)
@@ -71,8 +69,7 @@ class XmlEnvelopeBuilder:
         ns_url = self._document_tag_url(tag_name)
 
         # Root element owns all four xmlns declarations. lxml uses ``None`` as
-        # the nsmap key for the default namespace so the root tag is unprefixed
-        # (PHP sabre/xml's ``namespaceMap['<invoice-2>' => '']`` — matches).
+        # the nsmap key for the default namespace so the root tag is unprefixed.
         nsmap = {None: ns_url, "cac": _NS_CAC, "cbc": _NS_CBC, "ext": _NS_EXT}
         root = etree.Element(f"{{{ns_url}}}{tag_name}", nsmap=nsmap)
 
@@ -80,8 +77,7 @@ class XmlEnvelopeBuilder:
         self._stamp_currency(content, self._document_currency_code())
         self._render_children(root, content)
 
-        # Inclusive C14N-1.0 (exclusive=False) — matches PHP's
-        # ``DOMDocument::C14N()`` default args. Keeps all four xmlns
+        # Inclusive C14N-1.0 (exclusive=False). Keeps all four xmlns
         # declarations on the root invoice element (the form LHDN compares).
         # with_comments=False strips any incidental lxml whitespace nodes.
         c14n = etree.tostring(root, method="c14n", exclusive=False, with_comments=False)
@@ -138,9 +134,8 @@ class XmlEnvelopeBuilder:
         """Emit each key in ``content`` as a child element of ``parent``.
 
         Order of keys in the dict is preserved (Pydantic preserves the
-        declaration order in per-class ``_ser()``), matching the order PHP's
-        ``xmlSerialize()`` writes them in (which follows the UBL 2.1 XSD
-        element sequence — the same sequence both wire forms share).
+        declaration order in per-class ``_ser()``), which follows the
+        UBL 2.1 XSD element sequence that both wire forms share.
         """
         for key, value in content.items():
             tag = self._key_to_tag(key)
@@ -171,7 +166,7 @@ class XmlEnvelopeBuilder:
     def _format_text(self, value: Any) -> str:
         """Render a leaf ``_`` value as the canonical wire text.
 
-        Decimal -> 2dp fixed (PHP ``number_format(...,2,'.','')``).
+        Decimal -> 2dp fixed, trailing zeros preserved.
         bool -> lowercase 'true'/'false'.
         str -> XML-escaped string.
         None -> empty (no text content).
@@ -181,7 +176,7 @@ class XmlEnvelopeBuilder:
         if isinstance(value, bool):  # boolean handling wants lowercase 'true'/'false'
             return "true" if value else "false"
         if isinstance(value, (Decimal, float, int)):
-            return format_as_php_xml_token(value)
+            return format_canonical_xml_amount(value)
         return _xml_escape(str(value))
 
     @staticmethod

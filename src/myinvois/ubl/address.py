@@ -15,8 +15,8 @@ from ._base import _leaf, _UblModel
 class AddressLine(_UblModel):
     """A single street address line (`cbc:AddressLine`).
 
-    PHP `validate()` is empty for this class; we enforce only that the line is
-    a non-empty string (the parent Address enforces `>=1` line items).
+    Only enforced here as a non-empty string; the parent Address enforces the
+    `>=1` line-item requirement.
     """
 
     line: str = Field(serialization_alias="Line", min_length=1)
@@ -32,7 +32,7 @@ class Country(_UblModel):
     """
 
     identification_code: str = Field(serialization_alias="IdentificationCode")
-    # Default attribute set from the PHP SDK.
+    # Default attribute set: listID / listAgencyID.
     list_id: str = Field(default="ISO3166-1", exclude=True, repr=False)
     list_agency_id: str = Field(default="6", exclude=True, repr=False)
 
@@ -82,8 +82,8 @@ class Address(_UblModel):
 
     @model_validator(mode="after")
     def _validate_required(self) -> Address:
-        # PHP Address.validate(): requires city_name, country_subentity_code, country
-        # (address_lines is enforced by the field validator above).
+        # Required: city_name, country_subentity_code, country (address_lines
+        # is enforced by the field validator above).
         for attr, name in (
             ("city_name", "city_name"),
             ("country_subentity_code", "country_subentity_code"),

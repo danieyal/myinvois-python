@@ -1,6 +1,6 @@
 """Tests for myinvois.services.notifications — list notifications.
 
-Endpoint (from PHP SDK NotificationService):
+Endpoint:
 - GET /api/v1.0/notifications/taxpayer  : list previously sent notifications
 
 Filters: dateFrom, dateTo, type, language, status, pageNo, pageSize.

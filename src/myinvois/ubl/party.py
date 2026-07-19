@@ -31,7 +31,7 @@ class PartyIdentification(_UblModel):
 
     @model_serializer
     def _ser(self) -> dict[str, Any]:
-        # PHP SDK zero-pads numeric schemeIDs to 4 digits.
+        # Zero-pad numeric schemeIDs to 4 digits.
         sid = self.scheme_id
         if sid.isdigit():
             sid = sid.zfill(4)
@@ -158,7 +158,7 @@ class Party(_UblModel):
         out: dict[str, Any] = {}
         if self.industry_classification_code is not None:
             code, desc = self.industry_classification_code
-            # PHP's setIndustryClassificationCode(code, $name=null) keeps the
+            # Industry classification code with optional free-text name.
             # human-readable MSIC description in an attribute keyed "name"
             # (NOT listID="MSIC"). The wire form must match that attribute name.
             attr_name = self.industry_classification_name_attr
@@ -173,7 +173,7 @@ class Party(_UblModel):
                 pi.model_dump(by_alias=True, exclude_none=True) for pi in self.party_identifications
             ]
         if self.name is not None:
-            # PHP emits PartyName as `[{ "Name": [{"_": $name}] }]`.
+            # Emit PartyName as ``[{ "Name": [{"_": $name}] }]``.
             out["PartyName"] = {"Name": _leaf(self.name)}
         out["PostalAddress"] = self.postal_address.model_dump(by_alias=True, exclude_none=True)
         if self.physical_location is not None:
@@ -194,9 +194,8 @@ class Party(_UblModel):
 class AccountingParty(_UblModel):
     """`cac:AccountingSupplierParty` / `cac:AccountingCustomerParty`.
 
-    The PHP SDK has a single class `AccountingParty` reused for both halves;
-    the parent `Invoice` chooses the element name (`AccountingSupplierParty`
-    or `AccountingCustomerParty`) at the wrap level.
+    A single model reused for both roles; the parent `Invoice` chooses
+    the element name at the wrap level.
     """
 
     customer_assigned_account_id: str | None = Field(

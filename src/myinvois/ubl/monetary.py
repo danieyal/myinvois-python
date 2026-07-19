@@ -11,7 +11,7 @@ from ._base import _leaf, _money, _UblModel
 
 
 def _amt(value: Any, currency_id: str | None) -> dict[str, Any]:
-    """Emit a monetary leaf, always (matches PHP SDK getAmountArray default 0)."""
+    """Emit a monetary leaf, with a default of 0."""
     return _leaf(value, currencyID=currency_id)
 
 
@@ -35,7 +35,7 @@ class LegalMonetaryTotal(_UblModel):
     )
     payable_amount: Decimal = Field(serialization_alias="PayableAmount")
 
-    # The PHP SDK attaches currencyID=MYR to *every* amount attribute by default;
+    # Every amount attribute defaults to currencyID=MYR;
     # the actual currency is the document's DocumentCurrencyCode. The Phase 3c
     # envelope builder stamps the right currencyID based on the invoice's own
     # currency. Here we expose an optional override hook per amount.
@@ -58,7 +58,7 @@ class LegalMonetaryTotal(_UblModel):
 
     @model_validator(mode="after")
     def _requires_three_core_amounts(self) -> LegalMonetaryTotal:
-        # PHP validate(): tax_exclusive_amount, tax_inclusive_amount, payable_amount
+        # Validation: tax_exclusive_amount, tax_inclusive_amount, payable_amount
         # must be non-null. We additionally require line_extension_amount for the
         # finance library (no silent zero-fill).
         for name in (
@@ -74,7 +74,7 @@ class LegalMonetaryTotal(_UblModel):
     @model_serializer
     def _ser(self) -> dict[str, Any]:
         cid = self.currency_id
-        # Always-emit core totals (default 0 in PHP SDK).
+        # Always-emit core totals (default 0).
         out: dict[str, Any] = {
             "LineExtensionAmount": _amt(self.line_extension_amount, cid),
             "TaxExclusiveAmount": _amt(self.tax_exclusive_amount, cid),

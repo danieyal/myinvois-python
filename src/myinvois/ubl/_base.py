@@ -1,7 +1,7 @@
 """Common base infrastructure for the UBL 2.1 Pydantic models.
 
 Pydantic v2 models whose `model_dump(by_alias=True, exclude_none=True)`
-emits the same nested structure as the PHP SDK's `jsonSerialize()` methods:
+emits the same nested structure as the LHDN wire form:
 scalars are wrapped as `{"_": value, **attributes}` leaves, and every
 repeatable element is emitted as a list. This keeps Phase 3c (the envelope
 builder) trivial: it only has to wrap the per-class dumps in the

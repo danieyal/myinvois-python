@@ -2,18 +2,15 @@
 signer for UBL XML invoices).
 
 Pins byte-for-byte equality between the Python-implemented signer and the
-PHP-generated fixture
+golden fixture
 ``tests/fixtures/golden_invoice_signed.xml`` (md5 ``f36a659302dff7d7de0a0df725e43ad6``).
 The fixture was generated deterministically with
-``scripts/gen_signed_golden.php`` using the same ``_sample_invoice()`` shape
+the golden fixture generator using the same ``_sample_invoice()`` shape
 mirrored from ``tests/unit/test_envelope_builder.py`` and a fixed
 ``SigningTime = 2024-01-15T10:00:00Z``.
 
-Every test in this file is marked ``xfail(strict=True)`` until
-``myinvois.ubl.signing.XmlSigner`` lands (Phase 4.6). Flip
-``EXPECT_IMPLEMENTED = True`` at the top once the implementation is green.
 
-Reference ground-truth (PROVEN byte-for-byte Python ↔ PHP — see AGENTS.md
+Reference ground-truth (byte-for-byte with golden fixtures — see AGENTS.md
 PHASE 4 section):
 
 * Reference 1 DigestValue (DocDigest) — ``base64(SHA256(unsigned_xml_bytes))``
@@ -27,7 +24,7 @@ PHASE 4 section):
   (unwrapped from the UBLExtensions/sig:UBLDocumentSignatures block),
   base64-encoded, 344 chars.
 
-If any of these primitives drift between Python and PHP this file localises
+If any of these primitives drift from the reference output this file localises
 the failure to a single primitive before the final byte-for-byte assertion.
 """
 
@@ -101,7 +98,7 @@ def _import_certconfig():
 
 
 def _build_unsigned_xml() -> bytes:
-    """Use XmlEnvelopeBuilder to produce the same unsigned bytes the PHP
+    """Use XmlEnvelopeBuilder to produce the same unsigned bytes as the reference
     fixture was generated from (md5-checks against
     ``golden_invoice_unsigned.xml``)."""
     from myinvois.ubl.builders import XmlEnvelopeBuilder
@@ -181,7 +178,7 @@ class TestXmlSignerPrimitiveDigests:
 
 
 class TestXmlSignerGoldenByteParity:
-    """The byte-for-byte pin against the PHP-generated fixture."""
+    """The byte-for-byte pin against the golden fixture."""
 
     @_maybe_xfail
     def test_signed_xml_bytes_match_fixture_exact(self) -> None:
@@ -210,7 +207,7 @@ class TestXmlSignerStructuralInvariants:
 
     @_maybe_xfail
     def test_invoice_type_code_list_version_id_is_1_1_after_signing(self) -> None:
-        """PHP's XmlDocumentBuilder flips ``InvoiceTypeCode['listVersionID']``
+        """The reference XmlDocumentBuilder flips ``InvoiceTypeCode['listVersionID']``
         from ``"1.0"`` to ``"1.1"`` after signing — the Python signer must
         mutate the same way."""
         XmlSigner = _import_signer()

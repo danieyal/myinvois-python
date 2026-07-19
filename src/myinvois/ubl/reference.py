@@ -15,7 +15,7 @@ from ._base import _leaf, _UblModel
 class Attachment(_UblModel):
     """`cac:Attachment` — either an embedded binary file or an external URI.
 
-    Phase 3b does NOT perform the file-exists check the PHP SDK does; users
+    Phase 3b does NOT perform any file-exists check; users
     passing a `file_path` must ensure it is readable (the Phase 3c serializer
     will base64-encode the file contents lazily). Construction requires either
     a `file_path` or an `external_reference`.

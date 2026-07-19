@@ -2,11 +2,10 @@
 
 .. note::
 
-    These mirror the PHP SDK's ``Klsheng\\Myinvois\\Ubl\\Constant\\UblSpecifications``
-    and the TypeScript ``myinvois-client`` definitions exactly. The wire-form
-    envelope builder (Phase 3c) uses these URLs verbatim — must NOT be edited
-    or signature digests computed over the resulting JSON/XML will diverge from
-    LHDN's expected canonical form.
+    These mirror the TypeScript ``myinvois-client`` definitions exactly. The
+    wire-form envelope builder uses these URLs verbatim — must NOT be edited
+    or signature digests computed over the resulting JSON/XML will diverge
+    from LHDN's expected canonical form.
 """
 
 from __future__ import annotations
@@ -23,8 +22,8 @@ UBL_NAMESPACES: Final[dict[str, str]] = {
 }
 
 #: Full default-namespace URL per supported UBL document xmlTagName.
-#: Maps the canonical PHP ``Invoice::$xmlTagName`` to the ``_D`` value emitted
-#: in the JSON envelope (``urn:oasis:names:specification:ubl:schema:xsd:<Tag>-2``).
+#: Maps a document's ``xmlTagName`` to the ``_D`` value emitted in the JSON
+#: envelope (``urn:oasis:names:specification:ubl:schema:xsd:<Tag>-2``).
 ENVELOPE_DOCUMENT_TAGS: Final[dict[str, str]] = {
     "Invoice": "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",
     "CreditNote": "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2",

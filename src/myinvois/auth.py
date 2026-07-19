@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 __all__ = ["DEFAULT_REFRESH_MARGIN", "OAuth2Token", "StoredToken", "TokenManager"]
 
 # Re-acquire the token if it expires within this many seconds. 60s mirrors the
-# behaviour of the PHP SDK's "is it valid?" check with a safety margin so we
+# access-token validity window with a safety margin so we
 # never send a token that may already be expired by the time it reaches LHDN.
 DEFAULT_REFRESH_MARGIN: int = 60
 
