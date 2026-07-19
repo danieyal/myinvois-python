@@ -66,11 +66,13 @@ def format_canonical_json_amount(value: Decimal | float | int | str) -> str:
         )
 
     quantized = value.quantize(Decimal(10) ** -PRECISION)
-    s = repr(float(quantized))
-    # repr(float) gives short e.g. '1460.5', '0.3' (trailing zeros already gone);
-    # for integer-valued floats repr gives '1500.0' — drop the trailing '.0'.
-    if s.endswith(".0"):
-        s = s[:-2]
+    s = str(quantized)
+    # Strip trailing zeros and the decimal point for integer-valued amounts
+    # (e.g. "1500.00" -> "1500", "0.30" -> "0.3", "14.61" stays "14.61").
+    # Working entirely in Decimal avoids float(Decimal(...)) precision loss
+    # for large monetary values.
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
     return s
 
 

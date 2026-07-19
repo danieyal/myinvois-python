@@ -169,10 +169,11 @@ class Invoice(_UblModel):
         )
 
         def _or_set(target: Any, attr: str) -> None:
-            if getattr(target, attr) is None:
+            if getattr(target, attr) in (None, "MYR"):
                 setattr(target, attr, cid)
 
         _or_set(self.legal_monetary_total, "currency_id")
+        _or_set(self.tax_total, "tax_amount_currency_id")
         _or_set(self.tax_total, "rounding_amount_currency_id")
         for ts in self.tax_total.tax_sub_totals:
             _or_set(ts, "taxable_amount_currency_id")

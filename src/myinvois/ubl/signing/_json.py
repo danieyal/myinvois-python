@@ -28,7 +28,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from ._cert import (
@@ -64,7 +64,7 @@ def _format_signing_time(signing_time: datetime) -> str:
     """
     if signing_time.tzinfo is None:
         raise ValueError("signing_time must be timezone-aware (use datetime(..., tzinfo=UTC))")
-    return signing_time.astimezone().strftime("%Y-%m-%dT%H:%M:%SZ")
+    return signing_time.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _json_encode_canonical(content: Any) -> str:
