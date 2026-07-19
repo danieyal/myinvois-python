@@ -128,10 +128,9 @@ class ItemPriceExtension(_UblModel):
         if self.amount is None:
             raise ValueError("ItemPriceExtension.amount is required")
         if not self.amount_currency_id:
-            # PHP validate() also enforces the presence of the currencyID
-            # attribute. The default attribute is MYR; the Phase 3c serializer
-            # stamps the document currency if the caller has not set it. For
-            # Phase 3b we keep a "MYR" default to match the PHP default.
+            # The wire form requires a currencyID attribute on every amount.
+            # The serializer stamps the document currency if not set, but
+            # we default to "MYR" here for explicit model-level guarantees.
             self.amount_currency_id = "MYR"
         return self
 

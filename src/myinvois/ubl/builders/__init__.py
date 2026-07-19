@@ -1,9 +1,8 @@
-"""UBl envelope builders: ``JsonEnvelopeBuilder`` (canonical LHDN wire form) and
-``XmlEnvelopeBuilder`` (XML counterpart, Phase 4 / XAdES-signed form).
+"""UBL envelope builders: ``JsonEnvelopeBuilder`` (canonical LHDN wire form) and
+``XmlEnvelopeBuilder`` (XML counterpart, XAdES-signed form).
 
-The JSON builder produces byte-identical output to the PHP SDK's
-``JsonDocumentBuilder::build()`` so Phase 4 signature digests round-trip
-through LHDN's validator unchanged.
+The JSON builder emits the canonical LHDN wire form so Phase 4 signature
+digests round-trip through LHDN's validator unchanged.
 """
 
 from __future__ import annotations

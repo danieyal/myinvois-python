@@ -1,12 +1,12 @@
 """Phase 3c: UBL JSON envelope builder (pytest-first).
 
 Pins the canonical LHDN/MyInvois wire form byte-for-byte against the
-authoritative PHP reference SDK ``JsonDocumentBuilder::build()`` (and the
-cross-checking TypeScript ``myinvois-client`` type model), so a Phase 4
+LHDN MyInvois wire form
+so a Phase 4
 signature digest computed over this serialized string will round-trip
 through the LHDN validator unchanged.
 
-Key canonical rules (cross-verified PHP + TS types):
+Key canonical rules:
   * Envelope: ``{"_D": "...Invoice-2", "_A": cacNS, "_B": cbcNS, "_E": extNS,
     "Invoice": [<invoice_content>]}``.
   * Every element/leaf inside content is wrapped as a one-or-more element
@@ -16,7 +16,7 @@ Key canonical rules (cross-verified PHP + TS types):
     drop the decimal point entirely (``1500.00`` -> ``1500``).
   * Booleans emit unquoted (``true``/``false``). Non-ASCII text passes
     through unescaped (Chinese ``螺丝`` literally).
-  * Compact separators and Unicode passthrough (matches PHP
+  * Compact separators and Unicode passthrough (canonical form:
     ``JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES``).
 """
 
@@ -222,10 +222,10 @@ class TestJsonEnvelopeShape:
     def test_build_json_returns_str_compact_unicode_passthrough(self) -> None:
         s = JsonEnvelopeBuilder(_sample_invoice()).build_json()
         assert isinstance(s, str)
-        # PHP `JSON_UNESCAPED_UNICODE`: non-ASCII passes through literally.
+        # Non-ASCII passes through literally (canonical form).
         assert "螺丝" in s, "Chinese item description must pass through unescaped"
         assert "\\u" not in s, "must not contain ASCII-escape sequences"
-        # PHP does NOT unescape forward slashes (JSON_UNESCAPED_SLASHES).
+        # Forward slashes are NOT escaped (canonical form).
         # In URLs — none of our envelope bodies do, but the rule is
         # slashes literally appear when present.
         # Compact: no whitespace BETWEEN JSON tokens (whitespace is only
@@ -248,13 +248,13 @@ class TestJsonEnvelopeShape:
         assert env["_D"] == "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
         assert env["_A"] == UBL_NAMESPACES["cac"]
         assert env["_B"] == UBL_NAMESPACES["cbc"]
-        # PHP emits _E unconditionally (Phase 4 signing needs it).
+        # Emit _E unconditionally (signing needs it).
         assert env["_E"] == UBL_NAMESPACES["ext"]
         assert isinstance(env["Invoice"], list)
         assert len(env["Invoice"]) == 1
         inv = env["Invoice"][0]
         assert isinstance(inv, dict)
-        # Order (alphabetical, since PHP iterates $arrays in insertion order
+        # Order (alphabetical, since insertion order is preserved
         # but the field emit order is canonical UBL order): the first few keys.
         assert inv["ID"] == [{"_": "INV-0001"}]
         assert inv["IssueDate"] == [{"_": "2024-06-14"}]
@@ -281,7 +281,7 @@ class TestJsonEnvelopeShape:
 
 
 # ---------------------------------------------------------------------------
-# 3. Money rendering — PHP-compatible JSON numeric tokens
+# 3. Money rendering — canonical JSON numeric tokens
 # ---------------------------------------------------------------------------
 
 
@@ -292,7 +292,7 @@ class TestMoneyRendering:
         ][0]
 
     def test_decimal_with_trailing_zero_dropped_to_one_dp(self) -> None:
-        # 1436.50 -> PHP json_encode(1460.5) -> "1436.5"
+        # 1436.50 -> "1436.5"
         assert self._monetary()["LineExtensionAmount"] == [{"_": 1436.5, "currencyID": "MYR"}]
 
     def test_integer_valued_amount_strips_decimal_point(self) -> None:
@@ -328,7 +328,7 @@ class TestMoneyRendering:
         assert line["InvoicedQuantity"] == [{"_": 1, "unitCode": "C62"}]
 
     def test_amount_money_number_not_string(self) -> None:
-        """Decimal value MUST render as a JSON number token (per PHP canonical)."""
+        """Decimal value MUST render as a JSON number token."""
         s = JsonEnvelopeBuilder(_sample_invoice()).build_json()
         # check that an actual numeric literal `87.63` appears next to `"_"`
         # without quotes — the wire-form rule.
@@ -351,7 +351,7 @@ class TestStructuredSubmodels:
         assert tt["TaxAmount"] == [{"_": 87.63, "currencyID": "MYR"}]
 
     def test_tax_subtotal_uses_lowercase_t_canonical_key(self) -> None:
-        # PHP emits "TaxSubtotal" (lowercase 't'), not "TaxSubTotal".
+        # LHDN wire form uses "TaxSubtotal" (lowercase t), not "TaxSubTotal".
         tt = json.loads(JsonEnvelopeBuilder(_sample_invoice()).build_json())["Invoice"][0][
             "TaxTotal"
         ][0]
@@ -366,7 +366,7 @@ class TestStructuredSubmodels:
         assert tax_scheme["ID"] == [{"_": "OTH", "schemeID": "UN/ECE 5153", "schemeAgencyID": "6"}]
 
     def test_line_tax_total_percent_renders_as_integer_when_whole(self) -> None:
-        # Decimal("10.0") -> float("10.00") = 10.0 -> PHP json encodes as "10".
+        # Decimal("10.0") -> 10 (no ".0" suffix in canonical form).
         line = json.loads(JsonEnvelopeBuilder(_sample_invoice()).build_json())["Invoice"][0][
             "InvoiceLine"
         ][0]
@@ -479,11 +479,11 @@ class TestDeterminism:
         assert s.startswith('{"_D":"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",')
         assert s.endswith("}]}")
 
-    def test_byte_for_byte_matches_php_sdk_reference_output(self) -> None:
+    def test_byte_for_byte_matches_reference_output(self) -> None:
         # Regression guard: this exact byte string was produced by running
-        # /tmp/phpsdk (klsheng/myinvois-php-sdk) `JsonDocumentBuilder::build()`
+        # the reference `JsonDocumentBuilder::build()` output
         # on the *same* invoice materialised by `_sample_invoice()` (manually
-        # mirrored in PHP). The two outputs compared character-for-character
+        # The two outputs compared character-for-character
         # identical (md5sum match). Pinning it here protects against silent
         # drift in decimal canonicalisation, JSON directive flags, currency
         # stamping, attribute-name choice, array-of-one wrapping, key order,
@@ -558,7 +558,7 @@ class TestDeterminism:
         )
         actual = JsonEnvelopeBuilder(_sample_invoice()).build_json()
         assert actual == golden, (
-            "envelope JSON drifted from the PHP SDK reference output.\n"
+            "envelope JSON drifted from the reference output.\n"
             "First differing index:\n" + _first_diff(actual, golden)
         )
 

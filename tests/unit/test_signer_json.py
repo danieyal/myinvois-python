@@ -2,9 +2,9 @@
 signer for UBL JSON invoices).
 
 Pins byte-for-byte equality between the Python-implemented signer and the
-PHP-generated fixture ``tests/fixtures/golden_invoice_signed.json`` (md5
+golden fixture ``tests/fixtures/golden_invoice_signed.json`` (md5
 ``18e7920ae3fdd812d03f76e37b513a21``). The fixture was generated deterministically
-with ``scripts/gen_signed_golden.php`` using the same ``_sample_invoice()``
+with the golden fixture generator using the same ``_sample_invoice()``
 shape mirrored from ``tests/unit/test_envelope_builder.py`` and a fixed
 ``SigningTime = 2024-01-15T10:00:00Z``.
 

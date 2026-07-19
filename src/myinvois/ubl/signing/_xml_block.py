@@ -1,8 +1,8 @@
 """XML-signed UBLExtensions block construction.
 
-Produces the exact byte sequence PHP's ``XmlDocumentBuilder::signDocument``
-injects into the unsigned XML between ``<Invoice ...>`` (opening tag) and the
-first child element (``<cbc:ID>``).
+Produces the canonical UBLDocumentSignatures byte sequence LHDN's verifier
+expects, injected into the unsigned XML between ``<Invoice ...>`` (opening
+tag) and the first child element (``<cbc:ID>``).
 
 The block contains:
 
@@ -42,8 +42,8 @@ def build_xml_ublextensions_block(
     signing_time_str: str,
     cert_pem_raw: str,
 ) -> str:
-    """Build the ``<ext:UBLExtensions>...</ext:UBLExtensions>`` block exactly
-    as PHP emits it (after the apply of ``replaceCommonAttributes``).
+    """Build the ``<ext:UBLExtensions>...</ext:UBLExtensions>`` block in the
+    canonical LHDN-signed wire form (after common-attribute replacement).
     """
     sig_open = '<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Id="signature">'
     signed_info = (
@@ -151,12 +151,12 @@ _CAC_SIGNATURE_BLOCK = (
 def build_cac_signature_block() -> str:
     """Return the ``<cac:Signature>...</cac:Signature>`` sibling block.
 
-    PHP's ``Invoice::xmlSerialize`` emits this right after the
-    ``<cbc:DocumentCurrencyCode>`` element when UBLExtensions have been
-    attached to the Invoice — it is the *UBL 2.1 metadata signature* that
-    lives as a sibling to ``ext:UBLExtensions`` (NOT inside it). LHDN's
-    validator uses this as the "what was signed" anchor for the
-    ``URI="#id-xades-signed-props"`` reference.
+    The signed Invoice emits this right after the ``<cbc:DocumentCurrencyCode>``
+    element when UBLExtensions have been attached to the Invoice — it is the
+    *UBL 2.1 metadata signature* that lives as a sibling to
+    ``ext:UBLExtensions`` (NOT inside it). LHDN's validator uses this as the
+    "what was signed" anchor for the ``URI="#id-xades-signed-props"``
+    reference.
     """
     return _CAC_SIGNATURE_BLOCK
 

@@ -7,7 +7,7 @@ The client owns:
 - an optional ``onbehalfof`` header (used by intermediary/ERP systems).
 
 Path handling in ``request()`` intentionally mirrors both endpoints formats
-seen in the PHP SDK and the gateway:
+seen in the LHDN API reference implementations:
 
 - an absolute path like ``"/api/v1.0/..."`` is appended to ``base_api_url``,
 - a full URL like ``"https://..."`` is used verbatim,
@@ -66,7 +66,7 @@ def _message_from_error_payload(payload: dict[str, Any]) -> str | None:
 class MyInvoisClient:
     """Synchronous client for the MyInvois API.
 
-    Parameters mirror the PHP SDK's constructor:
+    Parameters:
 
     - ``client_id`` / ``client_secret``: OAuth2 credentials issued in the
       MyInvois portal.
@@ -137,7 +137,7 @@ class MyInvoisClient:
 
         # The MyInvois /connect/token endpoint also expects the onbehalfof
         # header for intermediary authentication, so add it on the token POST
-        # itself when configured. See PHP IdentityService::login.
+        # itself when configured.
         token_headers: dict[str, str] = {}
         if self._on_behalf_of is not None:
             token_headers["onbehalfof"] = self._on_behalf_of

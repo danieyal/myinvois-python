@@ -19,7 +19,7 @@ class TaxScheme(_UblModel):
     name: str | None = Field(default=None, serialization_alias="Name")
     tax_type_code: str | None = Field(default=None, serialization_alias="TaxTypeCode")
     currency_code: str | None = Field(default=None, serialization_alias="CurrencyCode")
-    # Default attributes per PHP SDK TaxScheme.idAttributes.
+    # Default attribute set (canonical LHDN TaxScheme id attributes).
     scheme_id: str = Field(default="UN/ECE 5153", exclude=True, repr=False)
     scheme_agency_id: str = Field(default="6", exclude=True, repr=False)
 
@@ -54,7 +54,7 @@ class TaxCategory(_UblModel):
     )
     tax_exemption_reason: str | None = Field(default=None, serialization_alias="TaxExemptionReason")
     tax_scheme: TaxScheme = Field(serialization_alias="TaxScheme")
-    # Default empty idAttributes in PHP SDK.
+    # No default ``schemeID``/``schemeAgencyID`` on the category ID.
     id_scheme_id: str | None = Field(default=None, exclude=True, repr=False)
 
     @field_validator("id", mode="before")
@@ -108,10 +108,9 @@ class TaxSubTotal(_UblModel):
     tax_category: TaxCategory = Field(serialization_alias="TaxCategory")
     per_unit_amount: Decimal | None = Field(default=None, serialization_alias="PerUnitAmount")
     base_unit_measure: Decimal | None = Field(default=None, serialization_alias="BaseUnitMeasure")
-    # Per-amount currencyID defaults come from the document currency; in the
-    # PHP SDK the per-amount Attributes default to MYR but the serializer is
-    # responsible for stamping the right currencyID in Phase 3c. Phase 3b
-    # exposes optional overrides here.
+    # Per-amount currencyID defaults come from the document currency (MYR by
+    # default); the serializer is responsible for stamping the right
+    # currencyID. Optional overrides are exposed here.
     taxable_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
     tax_amount_currency_id: str | None = Field(default="MYR", exclude=True, repr=False)
 

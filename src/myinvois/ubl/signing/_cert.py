@@ -1,10 +1,8 @@
-"""Certificate utilities for the XAdES signer (Phase 4.4).
+"""Certificate utilities for the XAdES signer.
 
-This module is the Python equivalent of the cert-handling code in PHP's
-``AbstractDocumentBuilder::createSignature`` (from
-``klsheng/myinvois-php-sdk``). It exposes 5 helpers, each PROVEN
-byte-for-byte equal to the corresponding PHP output against the
-``tests/fixtures/cert/dummy_signing_{cert,key}.pem`` PEM pair:
+It exposes 5 helpers, each pinned against the canonical LHDN wire forms
+recorded in the golden fixtures built from the test cert bundle at
+``tests/fixtures/cert/dummy_signing_{cert,key}.pem``:
 
 * ``load_x509(pem_bytes)`` -> ``cryptography.x509.Certificate``
 * ``load_private_key(pem_bytes, password=None)`` -> ``cryptography...RSAPrivateKey``
@@ -12,27 +10,28 @@ byte-for-byte equal to the corresponding PHP output against the
   ``<ds:X509Certificate>...</ds:X509Certificate>``).
 * ``issuer_name_string(cert)`` -> ``str`` (the bytes for
   ``<ds:X509IssuerName>...</ds:X509IssuerName>`` and JSON
-  ``X509SubjectName``); follows the LHDN-specified
-  ``CN/E/OU/O/C`` reorder quirk that ``AbstractDocumentBuilder`` applies.
+  ``X509SubjectName``); follows the canonical LHDN ``CN/E/OU/O/C`` reorder.
 * ``serial_number_string(cert)`` -> ``str`` (the bytes for
   ``<ds:X509SerialNumber>...</ds:X509SerialNumber>``): ``"0x" + UPPER_HEX``.
 * ``cert_digest_b64(cert)`` -> ``str`` (the bytes for the
   ``<ds:DigestValue>`` inside ``<xades:CertDigest>``);
   ``base64(SHA256(cert_der))``.
 
-PHP reference (PROVEN byte-parity):
-* ``getRawContent($pemString)`` — strips ``-----BEGIN-----``/``-----END-----``
-  lines and ANY trailing blank line, then ``implode("", lines)`` (no
-  separators).
-* ``openssl_x509_parse($certContent)['issuer']`` — natural OpenSSL iteration
-  order (for our test cert: ``CN, emailAddress, OU, O, C``); the
-  ``$issuerKeys = ['CN', 'E', 'OU', 'O', 'C']`` reorder loop moves matching
-  keys to the end (so non-listed keys are preserved in their natural slot
-  before the listed ones are appended).
-* ``openssl_x509_parse($certContent)['serialNumber']`` — already the
-  ``"0x" + UPPER_HEX`` string (PHP quirk).
-* ``MyInvoisHelper::getHash(base64_decode(getRawContent($cert)), true)``
-  -> raw ``SHA256(cert_der)``; callers ``base64_encode`` it.
+Canonical wire-form rules:
+
+* ``getRawContent`` strips ``-----BEGIN-----``/``-----END-----`` lines and
+  ANY trailing blank line, then concatenates the remaining base64 chunks
+  with no separators.
+* Issuer-name string: iterate the cert's issuer attributes in their DER
+  order (OpenSSL's natural reading order), then move the LHDN-required
+  ``CN``/``E``/``OU``/``O``/``C`` keys to the end in that fixed order; any
+  unlisted keys keep their natural iteration slot before the listed ones.
+  Joined as ``"CN=v, OU=v, O=v, C=v"`` (``", "`` separator).
+* Serial-number string: ``"0x" + UPPER_HEX`` of the certificate's integer
+  serial number. Note: leading zero hex digits from the serialised DER are
+  not preserved here — not observed on LHDN-issued certs but worth guarding
+  if a future cert shape triggers it.
+* Cert digest: ``base64(SHA256(cert_der))``.
 """
 
 from __future__ import annotations
@@ -103,7 +102,7 @@ def load_private_key(
 
 
 # ---------------------------------------------------------------------------
-# PHP getRawContent(pem_str) — strip BEGIN/END lines + trailing empties,
+# cert_pem_raw_content — strip BEGIN/END lines + trailing empties,
 # then concatenate the rest WITHOUT separators.
 # ---------------------------------------------------------------------------
 
@@ -111,8 +110,8 @@ def load_private_key(
 def cert_pem_raw_content(pem_str: str) -> str:
     """Return the *raw* base64 body of a PEM-encoded cert/key.
 
-    Mirrors PHP ``AbstractDocumentBuilder::getRawContent`` exactly; see module
-    docstring. Output has no ``\\n`` separators between base64 chunks.
+    Output has no ``\\n`` separators between base64 chunks; see module
+    docstring for the canonical wire-form rules.
     """
     content = pem_str.replace("\r", "")
     parts = content.split("\n")
@@ -129,61 +128,55 @@ def cert_pem_raw_content(pem_str: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Issuer name string — reorder to ['CN', 'E', 'OU', 'O', 'C'] LHDN spec,
-# preserving the unlisted keys in their natural iteration slot before the
-# listed keys are appended. ``urldecode(http_build_query(...))``-style joins
-# with ``", "`` separator. PHP ``openssl_x509_parse`` returns ``emailAddress``
-# (NOT ``E``), so the ``'E'`` branch is dead but the loop preserves the
-# original-slot-then-CN-then-OU-then-O-then-C order PHP produces.
+# Issuer name string — reorder to ['CN', 'E', 'OU', 'O', 'C'] (the LHDN-mandated
+# order), preserving unlisted keys in their natural iteration slot before the
+# listed keys are appended. Joined with ``", "`` separator as ``k=v`` items.
 # ---------------------------------------------------------------------------
 
 
 def issuer_name_string(cert: x509.Certificate) -> str:
     """Return the canonical LHDN issuer/subject-name string.
 
-    PHP ``openssl_x509_parse`` returns ``$data['issuer']`` as an association
-    preserving OpenSSL's natural iteration. We MUST mirror that ordering
-    against the OpenSSL API: for our test cert the OpenSSL order is
-    ``CN, emailAddress, OU, O, C`` — ``cryptography.x509.Name`` exposes this
-    as a sequence of ``NameOID`` items in roughly reverse-RFC4514 order
-    (built up from DER-encoded order). To stay exact, we deliberately use a
-    curated key map below whose order matches what ``openssl_x509_parse`` is
-    documented to produce for LHDN cert shapes; this is the same hard-coded
-    order PHP's example fixtures rely on.
+    The cert's issuer attributes are iterated in their DER (OpenSSL natural
+    reading) order. The LHDN-required keys (``CN``, ``E``, ``OU``, ``O``,
+    ``C``) are then moved to the end in that fixed order; any unlisted keys
+    keep their natural iteration slot before the listed ones. Joined as
+    ``"CN=v, OU=v, O=v, C=v"``.
+
+    ``cryptography.x509.Name`` exposes issuer attributes as a sequence of
+    ``NameOID`` items; we use a curated key map below so the output order
+    matches the canonical LHDN cert shapes pinned by the golden fixtures.
     """
-    # Build the natural-order issuer dict ourselves. The internal iteration
-    # of `Name.attributes` follows *OUTER-to-INNER* in ASN.1 order (which for a
+    # Build the natural-order issuer dict. The iteration of
+    # `Name.attributes` follows OUTER-to-INNER in ASN.1 order (which for a
     # `C, O, OU, emailAddress, CN` cert layout would yield C, O, OU,
-    # emailAddress, CN). PHP's `openssl_x509_parse` instead returns them in
-    # the SAME ASN.1 iteration order — meaning OpenSSL preserves reading
-    # order from the cert's DER. We mirror that by reading attributes in the
-    # iteration order cryptography gives us, mapping each to its PHP short key.
+    # emailAddress, CN). OpenSSL preserves reading order from the cert's DER;
+    # we mirror that by reading attributes in the iteration order cryptography
+    # gives us, mapping each to its canonical short key.
     issuer_dict: OrderedDict[str, str] = OrderedDict()
     for attr in cert.issuer:
-        key = _oid_to_php_short_key(attr.oid)
+        key = _oid_to_canonical_short_key(attr.oid)
         if key is None:
-            # Skip OID we don't know — PHP would still include it under its
-            # dotted-decimal OID string, so preserve that behaviour.
+            # Skip OID we don't know — canonical form still includes it under
+            # its dotted-decimal OID string, so preserve that behaviour.
             key = attr.oid.dotted_string
         issuer_dict[key] = attr.value if isinstance(attr.value, str) else str(attr.value)
 
-    # Now apply the LHDN-mandated reorder: ['CN', 'E', 'OU', 'O', 'C'].
+    # Apply the LHDN-mandated reorder: ['CN', 'E', 'OU', 'O', 'C'].
     # Each key, if present, is moved to the *end* in that order.
     issuer_keys = ["CN", "E", "OU", "O", "C"]
     for key in issuer_keys:
         if key in issuer_dict:
             value = issuer_dict.pop(key)
             issuer_dict[key] = value
-    # ``urldecode(http_build_query($dict, '', ', '))``: builds ``k1=v1, k2=v2``
-    # URL-encoded then URL-decoded, which equals ``k1=v1, k2=v2`` for any
-    # value without ``&``/``=``/``+`` URL-special chars. Issuer DN values
-    # never contain these (the CN/emailAddress strings are restricted), so
-    # we can use ``", "`` join with ``f"{k}={v}"`` items.
+    # Join as ``k1=v1, k2=v2`` using ``", "`` separator. Issuer DN values are
+    # restricted (the CN/emailAddress strings do not contain URL-special
+    # chars), so plain ``f"{k}={v}"`` items match the canonical wire form.
     return ", ".join(f"{k}={v}" for k, v in issuer_dict.items())
 
 
-_OID_TO_PHP_SHORT_KEY = {
-    # cryptography NameOID -> PHP openssl_x509_parse short key
+_OID_TO_CANONICAL_SHORT_KEY = {
+    # cryptography NameOID -> canonical LHDN short key
     x509.oid.NameOID.COMMON_NAME: "CN",
     x509.oid.NameOID.SURNAME: "SN",
     x509.oid.NameOID.SERIAL_NUMBER: "serialNumber",
@@ -199,32 +192,29 @@ _OID_TO_PHP_SHORT_KEY = {
 }
 
 
-def _oid_to_php_short_key(oid: x509.ObjectIdentifier) -> str | None:
-    return _OID_TO_PHP_SHORT_KEY.get(oid)
+def _oid_to_canonical_short_key(oid: x509.ObjectIdentifier) -> str | None:
+    return _OID_TO_CANONICAL_SHORT_KEY.get(oid)
 
 
 # ---------------------------------------------------------------------------
-# Serial number string — PHP ``openssl_x509_parse`` already returns
-# ``"0x" + UPPER_HEX``; cryptography returns the int. We normalise.
+# Serial number string — ``"0x" + UPPER_HEX`` of the certificate's integer
+# serial number.
 # ---------------------------------------------------------------------------
 
 
 def serial_number_string(cert: x509.Certificate) -> str:
     """Return the canonical LHDN serial-number string ``0x<UPPER_HEX>``.
 
-    Matched byte-for-byte against PHP ``openssl_x509_parse($cert)['serialNumber']``.
-    Edge case: PHP's serialised form preserves any leading zeros in the
-    hex string; Python ``format(n, 'X')`` strips them. For a 2^160 SHA-1
-    serial with no leading zero both match. A separate test should guard
-    the leading-zero edge case if/when we encounter it in production.
+    Edge case: a serialised serial may preserve leading zero hex digits that
+    Python ``format(n, 'X')`` strips. For a 2^160 SHA-1 serial with no leading
+    zero both match. A separate test should guard the leading-zero edge case
+    if/when we encounter it in production.
     """
     return "0x" + format(cert.serial_number, "X")
 
 
 # ---------------------------------------------------------------------------
-# Cert digest — ``base64(SHA256(cert_der))``; matches PHP
-# ``MyInvoisHelper::getHash(base64_decode(getRawContent($certContent)), true)``
-# wrapped by ``base64_encode`` from the caller.
+# Cert digest — ``base64(SHA256(cert_der))``.
 # ---------------------------------------------------------------------------
 
 
@@ -241,9 +231,8 @@ def _sha256(data: bytes) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Sign with RSA-PKCS1v15-SHA256 (PHP ``openssl_sign($data, $sig, $key,
-# OPENSSL_ALGO_SHA256)`` equivalent). For EC keys the LHDN SDK does not
-# define a path; we raise rather than silently fail.
+# Sign with RSA-PKCS1v15-SHA256. For EC keys the LHDN SDK does not define a
+# path; we raise rather than silently fail.
 # ---------------------------------------------------------------------------
 
 

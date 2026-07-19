@@ -1,8 +1,8 @@
 """MyInvois (LHDN) enumerated code tables.
 
 All tables are loaded lazily from JSON data packaged with the library (see
-``_data/``). The data was extracted from the official PHP SDK's
-``Constant/*.php`` tables via ``scripts/extract_codes.py``.
+``_data/``). The data was extracted from LHDN reference
+code tables via ``scripts/extract_codes.py``.
 
 Two kinds of tables are exposed:
 

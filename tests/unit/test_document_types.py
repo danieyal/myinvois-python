@@ -1,6 +1,6 @@
 """Tests for myinvois.services.document_types — list/get/version endpoints.
 
-Endpoints (verified against klsheng/myinvois-php-sdk DocumentTypeService):
+Endpoints (verified against the LHDN MyInvois API):
 - GET  /api/v1.0/documenttypes                  -> list of document types
 - GET  /api/v1.0/documenttypes/{id}              -> single document type
 - GET  /api/v1.0/documenttypes/{id}/versions/{vid}  -> document type version

@@ -1,12 +1,12 @@
 """Unit tests for the UBL 2.1 document models (Phase 3b).
 
-These tests pin the public Pydantic surface that mirrors the PHP SDK
+These tests pin the public Pydantic surface that mirrors the LHDN wire form
 'Klsheng\\Myinvois\\Ubl*' classes. They assert:
 
 * idiomatic Python snake_case construction,
 * acceptance of either the curated StrEnum OR a raw string (the library
   convention established in Phase 3a),
-* required-field validation ported from the PHP SDK's IValidator::validate(),
+* required-field validation per the LHDN specification,
 * Decimal money types (no float arithmetic) for a finance library,
 * the field aliases matching the exact UBL 2.1 element names used by LHDN.
 """
@@ -67,8 +67,8 @@ from myinvois.ubl import (
 )
 
 # ---------------------------------------------------------------------------
-# Fixtures: build a realistic invoice matching the PHP SDK example fixture
-# (src/Example/Ubl/CreateDocumentExample.php) so the test bundle exercises
+# Fixtures: build a realistic invoice matching the canonical example
+# so the test bundle exercises
 # every mainstream-path class together.
 # ---------------------------------------------------------------------------
 
@@ -204,7 +204,7 @@ class TestInvoiceConstruction:
     def test_alias_serialises_to_exact_ubl_names(self) -> None:
         invoice = _invoice(id="X-42")
         dumped = invoice.model_dump(by_alias=True, exclude_none=True)
-        # Top-level UBL element names per PHP SDK xmlSerialize/jsonSerialize.
+        # Top-level UBL element names per the canonical wire form.
         assert "ID" in dumped
         assert "IssueDate" in dumped
         assert "IssueTime" in dumped
@@ -220,14 +220,14 @@ class TestInvoiceConstruction:
         invoice = _invoice()
         dumped = invoice.model_dump(by_alias=True, exclude_none=True)
         # the InvoiceTypeCode leaf carries listVersionID="1.0" by default,
-        # matching the PHP SDK's $invoiceTypeCodeAttributes default.
+        # matching the canonical InvoiceTypeCodeAttributes default.
         tc = dumped["InvoiceTypeCode"]
         assert tc["_"] == "01"
         assert tc["listVersionID"] == "1.0"
 
 
 # ---------------------------------------------------------------------------
-# 2. Required-field validation (ported from PHP IValidator::validate())
+# 2. Required-field validation
 # ---------------------------------------------------------------------------
 
 
@@ -263,7 +263,7 @@ class TestValidation:
             assert needle in errs, f"{needle} not reported by Address validation"
 
     def test_address_line_requires_nothing_extra(self) -> None:
-        # AddressLine has an empty PHP validate(); construction without line is
+        # AddressLine validates trivially; construction without line is
         # permitted at the model level (it is required by its parent Address
         # via the address_lines validator enforcing non-empty strings).
         al = AddressLine(line="Lot 66")
@@ -602,7 +602,7 @@ class TestInvoiceOptionalBlocks:
         # will render it as a 2dp string ("50.00"). Compare against the Decimal.
         assert pp["PaidAmount"]["_"] == Decimal("50")
         assert pp["PaidAmount"]["currencyID"] == "MYR"
-        # PHP SDK splits PaidDateTime into a PaidDate + PaidTime pair.
+        # The wire form represents PaidDateTime as a PaidDate + PaidTime pair.
         assert pp["PaidDate"]["_"] == "2024-06-01"
         assert pp["PaidTime"]["_"] == "00:00:00Z"
 

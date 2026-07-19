@@ -61,7 +61,7 @@ class AllowanceCharge(_UblModel):
 
 class InvoicePeriod(_UblModel):
     """`cac:InvoicePeriod` — must have a start_date / end_date / description
-    (PHP validate() requires at least one).
+    (at least one is required).
     """
 
     start_date: date | None = Field(default=None, serialization_alias="StartDate")

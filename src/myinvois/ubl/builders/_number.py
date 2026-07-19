@@ -1,46 +1,44 @@
-"""Number formatting compatible with the PHP SDK's ``NumberFormatter::formatAsFloat``.
+"""Canonical number formatting for the LHDN MyInvois wire form.
 
-The wire form expects every monetary amount to render as a JSON number
-literal, NOT a string. The canonical rules (cross-verified against the PHP
-SDK and the TypeScript ``myinvois-client``):
+Monetary amounts render as JSON number literals (not strings) and as XML
+text content with a fixed 2-dp precision. The LHDN validator re-parses
+these tokens, so the rendered form must round-trip cleanly.
 
 * ``Decimal('1460.50')`` -> ``1460.5``  (trailing zero dropped)
 * ``Decimal('1500.00')`` -> ``1500``     (integer-valued, no decimal point)
-* ``Decimal('14.61')``   -> ``14.61`    (kept as-is)
+* ``Decimal('14.61')``   -> ``14.61``    (kept as-is)
 * ``Decimal('5.07')``    -> ``5.07``
 * ``Decimal('0.30')``    -> ``0.3``
 * ``Decimal('10.0')``    -> ``10``       (used for ``Percent``, etc.)
 * ``Decimal('0.15')``    -> ``0.15``
 
-Internally the models hold ``Decimal`` instances for finance precision. The
-boundary to JSON numeric token happens at envelope rendering time so that:
-
-1. In-memory stays precise (no float arithmetic).
-2. The serialized token round-trips through LHDN's JSON validator, which
-   re-parses the number back into a float and applies its own decimal math.
-3. Phase 4's signature digest is computed over the canonical string emitted
-   by ``format_as_php_float_token`` so digests match the PHP / LHDN canonical
-   form exactly.
+Models hold ``Decimal`` everywhere (no float arithmetic). The boundary to
+a wire token happens at envelope rendering time so in-memory stays precise
+and the signature digest (Phase 4) is computed over the canonical string.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
 
-__all__ = ["PRECISION", "format_as_php_float_token", "format_as_php_xml_token"]
+__all__ = [
+    "PRECISION",
+    "format_canonical_json_amount",
+    "format_canonical_xml_amount",
+    "parse_decimal",
+]
 
 
-#: Default decimal precision — mirrors
-#: ``NumberFormatConfiguration::DEFAULT_PRECISION = 2``.
+#: Default decimal precision for monetary amounts.
 PRECISION: int = 2
 
 
-def format_as_php_float_token(value: Decimal | float | int | str) -> str:
-    """Return the canonical PHP-compliant JSON number token for an amount.
+def format_canonical_json_amount(value: Decimal | float | int | str) -> str:
+    """Render an amount as a canonical JSON number token.
 
-    Mirrors ``(float) number_format($value, 2, ".", "")`` followed by PHP's
-    ``json_encode`` float serialization (strip trailing zeros, drop ``.0``
-    for integer-valued floats).
+    Two decimal places of precision, trailing zeros stripped, and the
+    ``.0`` suffix dropped for integer-valued amounts (e.g. ``1460.5``,
+    ``1500``, ``0.3``).
 
     Args:
         value: a ``Decimal`` (preferred) or any ``float``/``int``/``str``
@@ -49,8 +47,8 @@ def format_as_php_float_token(value: Decimal | float | int | str) -> str:
             provided ``"1460.50"`` round-trips identically to ``Decimal("1460.50")``.
 
     Returns:
-        A JSON number token string ready to be appended to the wire-form
-        payload (e.g. ``"1460.5"``, ``"1500"``, ``"14.61"``).
+        A JSON number token string ready to be appended to the wire payload
+        (e.g. ``"1460.5"``, ``"1500"``, ``"14.61"``).
 
     Raises:
         InvalidOperation: if ``str`` input cannot be parsed to ``Decimal``.
@@ -63,14 +61,14 @@ def format_as_php_float_token(value: Decimal | float | int | str) -> str:
     elif isinstance(value, int):
         value = Decimal(value)
     elif not isinstance(value, Decimal):
-        raise TypeError(f"format_as_php_float_token expects Decimal/num/str; got {type(value)!r}")
+        raise TypeError(
+            f"format_canonical_json_amount expects Decimal/num/str; got {type(value)!r}"
+        )
 
     quantized = value.quantize(Decimal(10) ** -PRECISION)
-    f = float(quantized)
-    s = repr(f)
-    # Python repr(float) gives short form e.g. '1460.5', '0.3' — matches PHP
-    # json_encode for non-integer-valued floats. For integer-valued floats
-    # repr gives '1500.0' but PHP emits '1500' (drops the trailing '.0').
+    s = repr(float(quantized))
+    # repr(float) gives short e.g. '1460.5', '0.3' (trailing zeros already gone);
+    # for integer-valued floats repr gives '1500.0' — drop the trailing '.0'.
     if s.endswith(".0"):
         s = s[:-2]
     return s
@@ -97,16 +95,11 @@ def parse_decimal(value: Decimal | float | int | str) -> Decimal:
     raise TypeError(f"parse_decimal expects Decimal/num/str; got {type(value)!r}")
 
 
-def format_as_php_xml_token(value: Decimal | float | int | str) -> str:
-    """Return the canonical PHP-compliant XML number token for an amount.
+def format_canonical_xml_amount(value: Decimal | float | int | str) -> str:
+    """Render an amount as a canonical XML number token.
 
-    Mirrors ``NumberFormatter::format($value)`` (no precision override) as
-    called by the per-class ``xmlSerialize()`` methods::
-
-        number_format($value, 2, '.', '')
-
-    — exactly two decimal places, dot separator, no thousands separator.
-    Trailing zeros are preserved (matches the wire-canonical UBL XML form):
+    Exactly two decimal places, dot separator, no thousands separator.
+    Trailing zeros are preserved (the wire-canonical UBL XML form):
 
     * ``Decimal('1436.50')`` -> ``"1436.50"``
     * ``Decimal('1500')``/``Decimal('1500.00')`` -> ``"1500.00"``
@@ -132,5 +125,5 @@ def _quantize(value: Decimal | float | int | str) -> Decimal:
     if isinstance(value, int):
         return Decimal(value).quantize(Decimal(10) ** -PRECISION)
     raise TypeError(
-        f"format_as_php_xml_token expects Decimal/num/str; got {type(value)!r}"
+        f"format_canonical_xml_amount expects Decimal/num/str; got {type(value)!r}"
     )  # pragma: no cover - defensive

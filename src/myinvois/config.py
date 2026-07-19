@@ -19,7 +19,7 @@ class Environment(StrEnum):
     PRODUCTION = "production"
 
 
-# Base hostnames verified from klsheng/myinvois-php-sdk (IdentityService / DocumentService).
+# Base hostnames from the LHDN MyInvois API documentation.
 _API_HOSTS: dict[Environment, str] = {
     Environment.SANDBOX: "https://preprod-api.myinvois.hasil.gov.my",
     Environment.PRODUCTION: "https://api.myinvois.hasil.gov.my",

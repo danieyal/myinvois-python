@@ -1,6 +1,6 @@
 """Document Type service — list / get / get_version.
 
-Endpoints (from PHP SDK DocumentTypeService):
+Endpoints:
 - GET /api/v1.0/documenttypes            : list all published document types
 - GET /api/v1.0/documenttypes/{id}       : single document type
 - GET /api/v1.0/documenttypes/{id}/versions/{vid} : single version of a type

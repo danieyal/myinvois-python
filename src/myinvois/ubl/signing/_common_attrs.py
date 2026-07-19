@@ -1,24 +1,22 @@
-"""Replication of PHP ``MyInvoisHelper::replaceCommonAttributes``.
+"""Common-attribute replacement pass for signed XML fragments.
 
-MyInvois PHP SDK applies this string-surgery to two XML fragments:
+This string-surgery pass is applied to two XML fragments:
 
-* the *SignedProperties* subtree (used to compute the PropsDigest) — see
-  ``XmlDocumentBuilder::getPropsDigestHash``.
+* the *SignedProperties* subtree (used to compute the PropsDigest);
 * the entire signed document *after* all signature components have been
-  stitched in (the final stage of ``AbstractDocumentBuilder::signDocument``).
+  stitched in.
 
-In both cases the function injects the 5 ``xmlns:ds`` / ``xmlns:xades``
-declarations onto elements whose PHP-side serialization relied on the
-parent-scoped namespace, so that LHDN's verifier sees fully-qualified
-elements inside the hashed byte sequence (and inside the final signed XML
-payload).
+In both cases it injects the 5 ``xmlns:ds`` / ``xmlns:xades`` declarations
+onto elements whose serialization relies on a parent-scoped namespace, so
+that LHDN's verifier sees fully-qualified elements inside the hashed byte
+sequence (and inside the final signed XML payload).
 
-Why a string replace rather than XML-tree manipulation? PHP itself uses
-``str_replace`` over the serialized string. To match byte-for-byte we must
-do the same. ``lxml.etree.c14n()`` is overly aggressive about pruning
-redundant namespace declarations PHP keeps, and resorting to manual tree
-injection caused several hash mismatches during reverse-engineering (see
-AGENTS.md PHASE 4 for context).
+Why a string replace rather than XML-tree manipulation? The canonical wire
+form keeps namespace declarations on individual elements that a strict XML
+serializer (e.g. ``lxml.etree.c14n()``) would prune as redundant, diverging
+from the LHDN-expected byte stream. Doing the injection as a deterministic
+string replace over the serialized output preserves the exact declared
+attributes byte-for-byte.
 """
 
 from __future__ import annotations
@@ -29,11 +27,8 @@ _XADES_NS = 'xmlns:xades="http://uri.etsi.org/01903/v1.3.2#"'
 
 
 def replace_common_attributes(xml: str) -> str:
-    """Replicate ``MyInvoisHelper::replaceCommonAttributes`` byte-for-byte.
-
-    Injects xmlns declarations onto 5 element-shapes that PHP serializes
-    without their parent namespace. Order matches PHP's replacement table
-    (see ``MyInvoisHelper.php``): SignedProperties, DigestMethod,
+    """Inject xmlns declarations onto 5 element-shapes that serialize without
+    their parent namespace. Order is: SignedProperties, DigestMethod,
     X509SerialNumber, X509IssuerName, DigestValue.
     """
     out = xml
@@ -41,10 +36,11 @@ def replace_common_attributes(xml: str) -> str:
         '<xades:SignedProperties Id="id-xades-signed-props">',
         f'<xades:SignedProperties Id="id-xades-signed-props" {_XADES_NS}>',
     )
-    # Note: PHP matches the *empty-tag* form ``<ds:DigestMethod Algorithm="..."
-    # ></ds:DigestMethod>`` (Sabre emits the binary element with a closing
-    # </ds:DigestMethod>). The xmlns:ds attribute is injected INSIDE the
-    # opening tag, before the existing Algorithm attribute.
+    # Inject into the *empty-tag* form
+    # ``<ds:DigestMethod Algorithm="..."></ds:DigestMethod>`` (the binary
+    # element with a closing ``</ds:DigestMethod>``). The xmlns:ds attribute
+    # is injected INSIDE the opening tag, before the existing Algorithm
+    # attribute.
     out = out.replace(
         '<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"></ds:DigestMethod>',
         '<ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"'

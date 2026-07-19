@@ -1,6 +1,6 @@
 """Tests for myinvois.services.taxpayer — TIN + QR endpoints.
 
-Endpoints (from PHP SDK TaxPayerService / TaxPayersService):
+Endpoints:
 - GET /api/v1.0/taxpayer/validate/{tin}?idType&idValue    : validate TIN
 - GET /api/v1.0/taxpayer/search/tin?...                   : search TIN
 - GET /api/v1.0/taxpayers/qrcodeinfo/{qrText}            : taxpayer from QR
@@ -42,7 +42,7 @@ def test_idtype_is_string_enum() -> None:
 
 
 def test_validate_tin_valid_returns_true(client: MyInvoisClient, respx_mock: Any) -> None:
-    # Per PHP TaxPayerService: empty body with 200 = TIN is valid.
+    # Empty body with 200 = TIN is valid.
     respx_mock.get(
         base_api_url(Environment.SANDBOX)
         + "/api/v1.0/taxpayer/validate/C2584563222?idType=BRN&idValue=202001234567"
