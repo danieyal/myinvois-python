@@ -196,13 +196,18 @@ class DocumentSummary(_Base):
 
 
 class GetSubmissionResponse(_Base):
-    """Body of the HTTP 200 response returned by ``GET /documentsubmissions/{id}``."""
+    """Body of the HTTP 200 response returned by ``GET /documentsubmissions/{id}``.
 
-    submission_uid: str = Field(alias="submissionUid")
+    LHDN can return a 200 with only an ``error`` block when the submission
+    is in a logically rejected state (e.g. ``OperationPeriodOver``).
+    """
+
+    submission_uid: str | None = Field(default=None, alias="submissionUid")
     document_count: int | None = Field(default=None, alias="documentCount")
     date_time_received: str | None = Field(default=None, alias="dateTimeReceived")
     overall_status: str | None = Field(default=None, alias="overallStatus")
     document_summary: list[DocumentSummary] = Field(default_factory=list, alias="documentSummary")
+    error: LhdnError | None = None
 
 
 # ---------------------------------------------------------------------------
