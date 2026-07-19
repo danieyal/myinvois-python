@@ -588,3 +588,17 @@ def test_xml_envelope_builder_smoke() -> None:
 
     out = XmlEnvelopeBuilder(_sample_invoice()).build_xml()
     assert out.startswith("<Invoice ") and out.endswith("</Invoice>")
+
+
+# ---------------------------------------------------------------------------
+# Regression: large Decimal exceeds default context precision
+# ---------------------------------------------------------------------------
+
+
+def test_large_decimal_json_amount_exceeds_default_precision() -> None:
+    """format_canonical_json_amount must handle values with >28 digits."""
+    from myinvois.ubl.builders._number import format_canonical_json_amount
+
+    big = Decimal("12345678901234567890123456789.90")  # 29 digits + 2dp
+    result = format_canonical_json_amount(big)  # must not raise InvalidOperation
+    assert result == "12345678901234567890123456789.9"  # trailing zero stripped

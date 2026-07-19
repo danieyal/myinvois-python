@@ -19,7 +19,7 @@ and the signature digest (Phase 4) is computed over the canonical string.
 
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, localcontext
 
 __all__ = [
     "PRECISION",
@@ -65,12 +65,16 @@ def format_canonical_json_amount(value: Decimal | float | int | str) -> str:
             f"format_canonical_json_amount expects Decimal/num/str; got {type(value)!r}"
         )
 
-    quantized = value.quantize(Decimal(10) ** -PRECISION)
-    s = repr(float(quantized))
-    # repr(float) gives short e.g. '1460.5', '0.3' (trailing zeros already gone);
-    # for integer-valued floats repr gives '1500.0' — drop the trailing '.0'.
-    if s.endswith(".0"):
-        s = s[:-2]
+    with localcontext() as ctx:
+        ctx.prec = max(len(value.as_tuple().digits) + PRECISION, 28)
+        quantized = value.quantize(Decimal(10) ** -PRECISION)
+    s = str(quantized)
+    # Strip trailing zeros and the decimal point for integer-valued amounts
+    # (e.g. "1500.00" -> "1500", "0.30" -> "0.3", "14.61" stays "14.61").
+    # Working entirely in Decimal avoids float(Decimal(...)) precision loss
+    # for large monetary values.
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
     return s
 
 
@@ -116,14 +120,7 @@ def format_canonical_xml_amount(value: Decimal | float | int | str) -> str:
 
 
 def _quantize(value: Decimal | float | int | str) -> Decimal:
-    if isinstance(value, Decimal):
-        return value.quantize(Decimal(10) ** -PRECISION)
-    if isinstance(value, str):
-        return Decimal(value).quantize(Decimal(10) ** -PRECISION)
-    if isinstance(value, float):
-        return Decimal(str(value)).quantize(Decimal(10) ** -PRECISION)
-    if isinstance(value, int):
-        return Decimal(value).quantize(Decimal(10) ** -PRECISION)
-    raise TypeError(
-        f"format_canonical_xml_amount expects Decimal/num/str; got {type(value)!r}"
-    )  # pragma: no cover - defensive
+    d = parse_decimal(value)
+    with localcontext() as ctx:
+        ctx.prec = max(len(d.as_tuple().digits) + PRECISION, 28)
+        return d.quantize(Decimal(10) ** -PRECISION)

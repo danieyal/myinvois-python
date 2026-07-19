@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from ._cert import (
@@ -56,10 +56,9 @@ def _format_signing_time(signing_time: datetime) -> str:
     e.g. ``2024-01-15T10:00:00Z``. Pinned to UTC; seconds resolution only
     (no microseconds).
     """
-    utc = signing_time.astimezone()
-    if utc.tzinfo is None:
+    if signing_time.tzinfo is None:
         raise ValueError("signing_time must be timezone-aware (use datetime(..., tzinfo=UTC))")
-    return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return signing_time.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class XmlSigner:

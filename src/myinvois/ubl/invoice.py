@@ -161,30 +161,47 @@ class Invoice(_UblModel):
 
     def _stamp_document_currency(self) -> None:
         """Stamp the document's currency_code into every per-amount currency_id
-        attribute (defaults to MYR when unset)."""
+        attribute (defaults to MYR when unset).
+
+        Tax amounts use ``tax_currency_code`` when set, falling back to
+        ``document_currency_code``; all other amounts always use the document
+        currency.
+        """
         cid = (
             self.document_currency_code.value
             if isinstance(self.document_currency_code, Currency)
             else self.document_currency_code
         )
+        if self.tax_currency_code is not None:
+            tax_cid = (
+                self.tax_currency_code.value
+                if isinstance(self.tax_currency_code, Currency)
+                else self.tax_currency_code
+            )
+        else:
+            tax_cid = cid
 
-        def _or_set(target: Any, attr: str) -> None:
-            if getattr(target, attr) is None:
-                setattr(target, attr, cid)
+        def _or_set(target: Any, attr: str, currency_id: str | None = None) -> None:
+            val = currency_id if currency_id is not None else cid
+            if getattr(target, attr) in (None, "", "MYR"):
+                setattr(target, attr, val)
 
+        # Document-level: legal monetary total uses document currency.
         _or_set(self.legal_monetary_total, "currency_id")
-        _or_set(self.tax_total, "rounding_amount_currency_id")
+        # Tax totals use tax currency.
+        _or_set(self.tax_total, "tax_amount_currency_id", tax_cid)
+        _or_set(self.tax_total, "rounding_amount_currency_id", tax_cid)
         for ts in self.tax_total.tax_sub_totals:
-            _or_set(ts, "taxable_amount_currency_id")
-            _or_set(ts, "tax_amount_currency_id")
+            _or_set(ts, "taxable_amount_currency_id", tax_cid)
+            _or_set(ts, "tax_amount_currency_id", tax_cid)
 
         for line in self.invoice_lines:
             _or_set(line, "line_extension_amount_currency_id")
             _or_set(line.price, "price_amount_currency_id")
             _or_set(line.item_price_extension, "amount_currency_id")
             for ts in line.tax_total.tax_sub_totals:
-                _or_set(ts, "taxable_amount_currency_id")
-                _or_set(ts, "tax_amount_currency_id")
+                _or_set(ts, "taxable_amount_currency_id", tax_cid)
+                _or_set(ts, "tax_amount_currency_id", tax_cid)
             for ac in line.allowance_charges:
                 _or_set(ac, "amount_currency_id")
 
