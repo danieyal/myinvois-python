@@ -209,6 +209,14 @@ class GetSubmissionResponse(_Base):
     document_summary: list[DocumentSummary] = Field(default_factory=list, alias="documentSummary")
     error: LhdnError | None = None
 
+    @model_validator(mode="after")
+    def _require_uid_or_error(self) -> GetSubmissionResponse:
+        if self.submission_uid is None and self.error is None:
+            raise ValueError(
+                "GetSubmissionResponse requires either submissionUid or error"
+            )
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Phase 5 — Document state change (cancel/reject) response models.

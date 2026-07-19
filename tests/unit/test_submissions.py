@@ -347,6 +347,14 @@ def test_get_submission_populates_error_block_on_logical_rejection(
     assert len(response.error.details) == 1
 
 
+def test_get_submission_rejects_empty_payload() -> None:
+    """An empty 200 body should not silently produce a valid response."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        GetSubmissionResponse.model_validate({})
+
+
 # -------- raw-bytes fallback -------------------------------------------------
 
 
