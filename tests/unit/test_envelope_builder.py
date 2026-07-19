@@ -483,7 +483,7 @@ class TestDeterminism:
         # Regression guard: this exact byte string was produced by running
         # the reference `JsonDocumentBuilder::build()` output
         # on the *same* invoice materialised by `_sample_invoice()` (manually
-        # The two outputs compared character-for-character
+        # The two outputs are compared character-for-character
         # identical (md5sum match). Pinning it here protects against silent
         # drift in decimal canonicalisation, JSON directive flags, currency
         # stamping, attribute-name choice, array-of-one wrapping, key order,

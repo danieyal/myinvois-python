@@ -9,9 +9,6 @@ the golden fixture generator using the same ``_sample_invoice()`` shape
 mirrored from ``tests/unit/test_envelope_builder.py`` and a fixed
 ``SigningTime = 2024-01-15T10:00:00Z``.
 
-Every test in this file is marked ``xfail(strict=True)`` until
-``myinvois.ubl.signing.XmlSigner`` lands (Phase 4.6). Flip
-``EXPECT_IMPLEMENTED = True`` at the top once the implementation is green.
 
 Reference ground-truth (byte-for-byte with golden fixtures — see AGENTS.md
 PHASE 4 section):

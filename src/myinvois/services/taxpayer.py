@@ -57,9 +57,8 @@ class TaxpayerService:
     ) -> bool:
         """Validate a Tax Identification Number before issuing an invoice.
 
-        Returns ``True`` when the LHDN API accepts the TIN/id pair (per the
-        An empty 200 body means valid; an error payload means not
-        valid).
+        Returns ``True`` when the LHDN API accepts the TIN/id pair.
+        An empty 200 body means valid; an error payload means not valid.
         """
         params = {"idType": _coerce_id_type(id_type), "idValue": id_value}
         raw = self._client.request("GET", f"{self.BASE_PATH}/validate/{tin}", params=params)

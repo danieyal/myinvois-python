@@ -1,7 +1,7 @@
 """Unit tests for the UBL 2.1 document models (Phase 3b).
 
-These tests pin the public Pydantic surface that mirrors the LHDN wire form
-'Klsheng\\Myinvois\\Ubl*' classes. They assert:
+These tests pin the public Pydantic surface that mirrors the canonical UBL
+wire form models. They assert:
 
 * idiomatic Python snake_case construction,
 * acceptance of either the curated StrEnum OR a raw string (the library
