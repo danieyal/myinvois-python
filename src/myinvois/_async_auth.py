@@ -9,6 +9,7 @@ the I/O (``_acquire``) is async.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -50,10 +51,12 @@ class AsyncTokenManager:
         self._client_secret = client_secret
         self._token_url = token_url
         self._scope = scope
+        self._owns_client = client is None
         self._http = client if client is not None else httpx.AsyncClient(timeout=30.0)
         self._refresh_margin = refresh_margin
         self._clock: Callable[[], float] = clock if clock is not None else time.monotonic
         self._stored = StoredToken(None)
+        self._lock = asyncio.Lock()
 
     @property
     def is_valid(self) -> bool:
@@ -77,11 +80,23 @@ class AsyncTokenManager:
             now=self._clock(), refresh_margin=self._refresh_margin
         ):
             return tok
-        return await self._acquire(headers=headers)
+        async with self._lock:
+            # Re-check under the lock — another coroutine may have refreshed.
+            tok = self._stored.value
+            if tok is not None and not tok.is_expired(
+                now=self._clock(), refresh_margin=self._refresh_margin
+            ):
+                return tok
+            return await self._acquire(headers=headers)
 
     def invalidate(self) -> None:
         """Drop the cached token."""
         self._stored.value = None
+
+    async def aclose(self) -> None:
+        """Release resources if the AsyncClient was internally created."""
+        if self._owns_client:
+            await self._http.aclose()
 
     def _build_form(self) -> dict[str, str]:
         return {

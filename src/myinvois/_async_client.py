@@ -57,7 +57,10 @@ class AsyncMyInvoisClient:
         on_behalf_of: str | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._http = http_client if http_client is not None else httpx.AsyncClient(timeout=30.0)
+        self._owns_client = http_client is None
+        self._http = (
+            http_client if http_client is not None else httpx.AsyncClient(timeout=30.0)
+        )
         self._environment = environment
         self._base_api_url = base_api_url(environment)
         self._base_portal_url = base_portal_url(environment)
@@ -232,8 +235,13 @@ class AsyncMyInvoisClient:
         return f"{self._base_portal_url}/{id_}/share/{long_id}"
 
     async def aclose(self) -> None:
-        """Release resources (HTTP connection pool)."""
-        await self._http.aclose()
+        """Release resources (HTTP connection pool).
+
+        Only closes the ``httpx.AsyncClient`` if it was internally created.
+        A caller-supplied ``http_client`` remains open for the caller to close.
+        """
+        if self._owns_client:
+            await self._http.aclose()
 
     async def __aenter__(self) -> AsyncMyInvoisClient:
         return self
