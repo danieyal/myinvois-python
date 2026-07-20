@@ -58,6 +58,7 @@ data-includes = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
     "respx>=0.21",
     "ruff>=0.7",
@@ -96,6 +97,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "live: tests requiring real MyInvois sandbox credentials (deselect with -m 'not live')",

@@ -5,6 +5,7 @@ Public API re-exports live here. See README and AGENTS.md for the roadmap.
 
 from __future__ import annotations
 
+from myinvois._async_client import AsyncMyInvoisClient
 from myinvois.client import MyInvoisClient
 from myinvois.codes import (
     MSIC,
@@ -25,6 +26,7 @@ from myinvois.services.taxpayer import IdType
 
 __all__ = [
     "MSIC",
+    "AsyncMyInvoisClient",
     "CertConfig",
     "ClassificationCode",
     "Country",
