@@ -3,8 +3,8 @@
 Unofficial Python SDK for the Malaysian **MyInvois** (LHDN) e-Invoice system.
 
 > Status: **Beta.** The full pipeline — build → sign → submit → track — is
-> implemented and covered by 284 tests, including golden-file tests that pin the
-> serialized and signed output byte-for-byte. Not yet verified end-to-end against 
+> implemented and covered by tests, including golden-file tests that pin the
+> serialized and signed output byte-for-byte. Not yet verified end-to-end against
 > a live LHDN environment — see [Scope and limitations](#scope-and-limitations).
 > See [AGENTS.md](./AGENTS.md) for architecture and detailed notes.
 
@@ -15,6 +15,8 @@ Unofficial Python SDK for the Malaysian **MyInvois** (LHDN) e-Invoice system.
   (`onbehalfof`) support, and a typed error hierarchy mapped to HTTP status.
 - **All the read endpoints** — document types, document raw/details/recent/search,
   notifications, TIN validation/search/QR lookup.
+- **All eight document types** — invoice, credit/debit/refund notes and their
+  self-billed variants, each a named class that fixes its own type code.
 - **UBL 2.1 document models** — Pydantic v2, `Decimal` money, LHDN code enums.
 - **Serializers** — canonical UBL **JSON** and **XML** envelopes, both pinned
   byte-for-byte by golden-file tests.
@@ -180,6 +182,43 @@ The models enforce LHDN's structural rules at construction time — a missing
 `commodity_classifications`, `tax_total` or `item_price_extension` on a line
 raises a Pydantic `ValidationError` rather than being rejected by the server.
 
+### Document types
+
+All eight MyInvois document types are supported. Each has a named class that
+takes the same fields as `Invoice`:
+
+| Class | Code | Purpose |
+| --- | --- | --- |
+| `Invoice` | `01` | The original document |
+| `CreditNote` | `02` | Corrects or reduces an earlier invoice |
+| `DebitNote` | `03` | Increases an earlier invoice |
+| `RefundNote` | `04` | Records money actually returned |
+| `SelfBilledInvoice` | `11` | Issued by the buyer on the supplier's behalf |
+| `SelfBilledCreditNote` | `12` | Self-billed equivalent of `02` |
+| `SelfBilledDebitNote` | `13` | Self-billed equivalent of `03` |
+| `SelfBilledRefundNote` | `14` | Self-billed equivalent of `04` |
+
+```python
+from myinvois.ubl import CreditNote
+
+note = CreditNote(id="CN-0001", ...)   # same fields as Invoice
+note.invoice_type_code                 # -> DocumentTypeCode.CREDIT_NOTE
+```
+
+**Prefer these over setting `invoice_type_code` by hand.** MyInvois carries
+every document type on the same `Invoice` envelope, distinguished *only* by
+that code — a credit note is byte-identical to an invoice apart from two
+characters. `Invoice` defaults the code to `01`, so building a credit note with
+`Invoice` and forgetting the field produces a valid, submittable document that
+claims to be an invoice. LHDN accepts it, and nothing in the payload reveals
+the mistake. The named classes make that unrepresentable: the code cannot be
+omitted, and passing a conflicting one raises.
+
+For self-billed documents the *buyer* issues the document. The classes do not
+transpose `accounting_supplier_party` and `accounting_customer_party` for you —
+populate them per LHDN's rules; the supplier remains the supplier of the goods
+or services.
+
 ### Serialize
 
 ```python
@@ -276,9 +315,6 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
 - **Not yet verified against a live LHDN environment.** Submission against the
   preprod sandbox with a real certificate is still outstanding. Treat acceptance
   as unproven until then.
-- Document type **`01` Invoice** is fully modelled. The other seven types
-  (`02` Credit Note, `03` Debit Note, `04` Refund Note and the four self-billed
-  variants `11`–`14`) are not yet exposed as models.
 - Signing requires an LHDN-issued certificate; the SDK never reads credentials
   implicitly — you pass a `CertConfig` explicitly.
 
@@ -286,7 +322,7 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
 
 ```bash
 uv sync
-uv run pytest                       # 284 tests
+uv run pytest
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src/myinvois
 ```
@@ -304,8 +340,9 @@ record.
 
 Remaining before 1.0:
 
-- CI workflow (ruff / mypy / pytest) and Trusted-Publishing release to PyPI.
-- The remaining seven document types (`02`, `03`, `04`, `11`–`14`).
+- Trusted-Publishing release to PyPI. (CI is in place: ruff, mypy and the test
+  suite run on Python 3.11–3.13, plus a check that the built wheel and sdist
+  ship the code tables and no signing material.)
 - Live sandbox verification against the LHDN preprod environment.
 
 ## Disclaimer

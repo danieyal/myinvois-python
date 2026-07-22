@@ -116,17 +116,16 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 4: digital signature (XmlSigner + JsonSigner, byte-for-byte PHP parity, commit `9ce6d48`, 232 tests)
 - [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `f4327a1`, 260 tests)
 - [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services, commit `80e7e2d` / PR #4, 284 tests)
-- [~] Phase 6b: polish + publish — CI + packaging metadata DONE; PyPI Trusted Publishing, remaining 7 document types and live sandbox verification still TODO
+- [~] Phase 6b: polish + publish — CI, packaging metadata, all 8 document types + named classes DONE; PyPI Trusted Publishing and live sandbox verification still TODO
 
 ## CURRENT_STATE
-Phases 0-6a done; Phase 6b partially done (CI + packaging + async coverage). **302 tests passing** (up from 284; 86% -> 87% line coverage). All four gates verified green *as of the async-coverage commit* — `ruff check .`, `ruff format --check .`, `mypy src/myinvois`, `pytest -m "not live"`. The format gate only became green in that commit; see FORMATTING DRIFT.
+Phases 0-6a done; Phase 6b partially done (CI, packaging, async coverage, all 8 document types + named classes). **405 tests passing** (up from 302). All four gates verified green *as of the document-classes commit* — `ruff check .`, `ruff format --check .`, `mypy src/myinvois`, `pytest -m "not live"`. The format gate only became green in that commit; see FORMATTING DRIFT.
 
 The full pipeline is implemented end-to-end and verified to run: build `Invoice` -> `JsonEnvelopeBuilder`/`XmlEnvelopeBuilder` -> `JsonSigner`/`XmlSigner` -> `build_submission_payload` -> `client.submissions.submit_documents`.
 
 Remaining before 1.0:
 
 - PyPI release automation (CI itself is now in place — see GITHUB section).
-- Document types `02`/`03`/`04`/`11`-`14` (only `01` Invoice is modelled).
 - Live sandbox verification against LHDN preprod.
 - Lesson from the two refresh-margin tests: **a passing test is not a testing test.** `test_token_manager_refresh_margin` was vacuous for the whole life of the sync suite — it never called `get_token()`, so `is_valid` was False merely because no token existed, and it would have passed with the refresh-ahead logic deleted. `auth.py` sat at 95% line coverage throughout, because coverage counts executed lines, not meaningful assertions. Both twins now drive the real path: acquire a token that expires inside the **default 60s margin**, call `get_token()` again, and assert it returns the fresh token with the route hit twice. Their sensitivity was confirmed by a throwaway **mutation run** — a scratch copy with `refresh_margin=0`, where the second call returns the cached token and the assertions fail. That mutation check is *not* part of the suite; re-do it by hand if you touch the refresh-ahead logic. When a test pins behaviour that matters, check it can fail.
 - `TokenManager` creates its own `httpx.Client` when none is injected but exposes no `close()`, while `AsyncTokenManager` tracks `_owns_client` and has `aclose()`. **Not a live leak** — both clients pass their own `httpx` client in, so the manager never builds one on the normal path; it only bites a bare `TokenManager()`, which is not exported. Low priority.
@@ -144,7 +143,7 @@ Remaining before 1.0:
 - `src/myinvois/__init__.py` re-exports `AsyncMyInvoisClient` alongside `MyInvoisClient`.
 
 ## TESTS
-302 passing. 39 of them are the async suite: `tests/unit/test_async_client.py` (Phase 6a, plus a Phase 6b status-mapping block) and `tests/unit/test_async_auth.py` (Phase 6b). The rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token acquisition, the `onbehalfof` header, and `async with` cleanup.
+405 passing. 59 are the named document classes (`tests/unit/test_document_classes.py`) and 43 the cross-type byte parity + envelope guard (`tests/unit/test_document_type_parity.py`) -- both Phase 6b, both mutation-tested. 39 are the async suite: `tests/unit/test_async_client.py` (Phase 6a, plus a Phase 6b status-mapping block) and `tests/unit/test_async_auth.py` (Phase 6b). The rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token acquisition, the `onbehalfof` header, and `async with` cleanup.
 
 ## VERSION_CONTROL_STATUS
 Phase 4 commit = `9ce6d48`. Phase 5 commit = `f4327a1`. Phase 6a commit = `80e7e2d` (PR #4). All on `master` (note: branch is `master`, not `main`). 33 files tracked as of Phase 3a; Phases 4-6a added more.
@@ -175,7 +174,7 @@ Before Phase 6b, `ruff format --check .` **failed on 4 files** on `master`: `_as
 - [x] Phase 4: digital signature
 - [x] Phase 5: submit + state services
 - [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services)
-- [~] Phase 6b: polish + publish — CI + packaging metadata DONE; PyPI Trusted Publishing, remaining 7 document types and live sandbox verification still TODO
+- [~] Phase 6b: polish + publish — CI, packaging metadata, all 8 document types + named classes DONE; PyPI Trusted Publishing and live sandbox verification still TODO
 
 ## PHASE 4 — Digital signature (TDD, in flight)
 
@@ -623,5 +622,26 @@ with a no-op async context manager turns 1 token request into 10.
 2. **Packaging metadata** — **DONE.** `pyproject.toml` `[project.urls]` had shipped placeholder `https://github.com/your-org/myinvois` URLs into the wheel METADATA; corrected to `danieyal/myinvois-python`. `Development Status` classifier bumped `3 - Alpha` -> `4 - Beta` to match the README.
 3. **`CERTIFY_BEFORE_PUBLIC` — RESOLVED.** Verified empirically: neither the wheel nor the sdist ships `tests/` or `tests/fixtures/cert/*`. The wheel carries only `myinvois/**` + `dist-info`; the sdist carries `PKG-INFO`, `README.md`, `pyproject.toml`, `src/`. `scripts/check_dist.py` now enforces this in CI, so the Phase 4 worry is closed rather than merely observed.
 4. **Release** — TODO. GitHub Actions Trusted Publishing to PyPI on tag `v*`, gated on the `package` job. **Outward-facing and irreversible per-version: confirm with the user before the first publish.**
-5. **Remaining document types** — TODO. `02` Credit Note, `03` Debit Note, `04` Refund Note, `11`-`14` self-billed variants. Per the Phase 3b design decision these reuse the Invoice models; self-billed swaps supplier/customer roles via a single builder function. The envelope builders already dispatch on the document tag (`ENVELOPE_DOCUMENT_TAGS`), so the work is model-side plus new golden fixtures from the PHP SDK.
+5. **All eight document types** — **DONE**, and the premise here was wrong. This entry assumed seven new models were needed. In fact the serializers already produced byte-identical output to the reference for every type code; the only change required was setting `invoice_type_code`. **MyInvois does not use UBL's per-document root elements** — a credit note is not `<CreditNote>` in `CreditNote-2`; every type rides the `Invoice` envelope and differs only by `cbc:InvoiceTypeCode`. The reference overrides the UBL default back to `Invoice` explicitly, and likewise maps `CreditNoteLine` -> `InvoiceLine` and `CreditedQuantity` -> `InvoicedQuantity`. See SYNC/ASYNC MIRROR CONTRACT's sibling section DOCUMENT TYPES below.
 6. **Live sandbox verification** — TODO. Run the full build/sign/submit pipeline against `preprod-api.myinvois.hasil.gov.my` with a real LHDN cert. Everything so far is verified against PHP-SDK goldens, which is a proxy for (not proof of) LHDN validator acceptance.
+
+## DOCUMENT TYPES — all eight, one envelope
+**MyInvois does not use UBL's per-document root elements.** Every document type rides the `Invoice` envelope and is distinguished *only* by `cbc:InvoiceTypeCode` (`01`-`04`, `11`-`14`). The reference makes this explicit:
+
+```php
+class CreditNote extends Invoice {
+    public $xmlTagName = 'Invoice'; // MyInvois System re-use back same tag name
+    protected $invoiceTypeCode = InvoiceTypeCodes::CREDIT_NOTE;
+}
+```
+
+and does the same for `CreditNoteLine` -> `InvoiceLine`, `CreditedQuantity` -> `InvoicedQuantity`. Verified: our output is byte-identical to the reference for all eight codes, XML and JSON, all sixteen comparisons.
+
+**Consequences worth keeping in mind:**
+
+- A credit note is byte-identical to an invoice apart from **two characters**. A document carrying the wrong type code is a wrong tax document that validates, submits, and is accepted — nothing else in the payload reveals it. This is the single most dangerous silent failure in the library.
+- `Invoice.invoice_type_code` defaults to `01`. `src/myinvois/ubl/documents.py` therefore provides `CreditNote`/`DebitNote`/`RefundNote`/`SelfBilled*`, each fixing its own code; a conflicting explicit code raises. **Prefer those over setting the code by hand**, and steer users there in docs and examples.
+- `ENVELOPE_DOCUMENT_TAGS` contains **only** `Invoice`, and both builders now *raise* on an unknown `xml_tag_name` rather than synthesising `urn:...:<Tag>-2`. Do not re-add the per-document entries: they are not what MyInvois accepts.
+- Self-billed types (`11`-`14`) are a *semantic* difference, not a structural one — the buyer issues the document. The classes deliberately do **not** transpose supplier/customer; silently swapping parties on a tax document would be worse than the problem being solved.
+
+Pinned by `tests/unit/test_document_type_parity.py` (cross-type byte parity, envelope guard) and `tests/unit/test_document_classes.py` (the named classes). Both mutation-tested.
