@@ -44,6 +44,7 @@ a side effect.
 from __future__ import annotations
 
 import os
+import secrets
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -184,8 +185,13 @@ def _minimal_invoice(supplier_tin: str, supplier_brn: str) -> Invoice:
         contact=Contact(telephone="+60123456789", electronic_mail="test@example.com"),
     )
     amount = Decimal("1.00")
+    # Second-level precision alone is not enough: a retry or a parallel run
+    # inside the same second would reuse the document ID, and these documents
+    # persist in the taxpayer's records. The random suffix keeps every
+    # submission distinguishable after the fact.
+    unique = f"{now:%Y%m%d%H%M%S}-{secrets.token_hex(3)}"
     return Invoice(
-        id=f"LIVE-{now:%Y%m%d%H%M%S}",
+        id=f"LIVE-{unique}",
         issue_date_time=now,
         document_currency_code=Currency.MYR,
         accounting_supplier_party=AccountingParty(
