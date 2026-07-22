@@ -314,8 +314,9 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
   unchanged*, not that LHDN's validator accepts it.
 
 - **Signing is verified against fixtures, not against LHDN.** The XAdES output
-  is pinned byte-for-byte against golden fixtures, and its structure matches
-  LHDN's own published signed sample. But no document has been signed with a
+  is pinned byte-for-byte against golden fixtures, and its element structure
+  matches LHDN's own published signed sample (element paths, not every
+  attribute value). But no document has been signed with a
   CA-issued certificate and accepted by LHDN's validator, because signing
   requires a certificate from an approved Malaysian CA. **Producing a signature
   LHDN accepts is therefore unproven.** If you are evaluating this library for
@@ -354,7 +355,10 @@ Remaining before 1.0:
 - Trusted-Publishing release to PyPI. (CI is in place: ruff, mypy and the test
   suite run on Python 3.11–3.13, plus a check that the built wheel and sdist
   ship the code tables and no signing material.)
-- Live sandbox verification against the LHDN preprod environment.
+- Live **submission** to the LHDN preprod sandbox. Authentication and the
+  read-only endpoints are already verified there; submitting a signed document
+  needs a certificate from an approved Malaysian CA, so signing remains
+  fixture-verified only.
 
 ## Disclaimer
 

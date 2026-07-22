@@ -630,7 +630,7 @@ with a no-op async context manager turns 1 token request into 10.
 
 **They are NOT a numeric oracle.** The page's worked values are placeholders: `DocDigest` and `PropsDigest` are printed as the *same* string (impossible for real digests over different inputs), `X509IssuerName` is literally `"Company Name"`, and `CertDigest` is truncated mid-value. LHDN states the sample "is for digital signature illustration purposes only". There is also **no downloadable test certificate**, so the page does not unblock signing.
 
-**As a structural check it was worth it.** Our XML signature matched the sample exactly — 44 signature-related elements each, no missing or extra element paths, and `Reference 1` identical in attributes and children. That is the first *official* corroboration of a structure otherwise derived from the community PHP SDK.
+**As a structural check it was worth it.** Our XML signature is *structurally* identical to the sample: 44 signature-related elements each, with no missing or extra element paths, and `Reference 1` matching in attributes and children. Note the scope of that claim — it compares element paths and presence, **not** attribute values, and it is not byte-for-byte: `Reference 2`'s `Type` value differs (see the table below). That is still the first *official* corroboration of a structure otherwise derived from the community PHP SDK.
 
 **Two discrepancies, both left unfixed on purpose:**
 
