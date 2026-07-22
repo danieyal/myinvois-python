@@ -119,7 +119,7 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [~] Phase 6b: polish + publish — CI + packaging metadata DONE; PyPI Trusted Publishing, remaining 7 document types and live sandbox verification still TODO
 
 ## CURRENT_STATE
-Phases 0-6a done; Phase 6b partially done (CI + packaging). **284 tests passing** (up from 260). All four gates verified green *as of the Phase 6b commit* — `ruff check .`, `ruff format --check .`, `mypy src/myinvois`, `pytest -m "not live"`. The format gate only became green in that commit; see FORMATTING DRIFT.
+Phases 0-6a done; Phase 6b partially done (CI + packaging + async coverage). **302 tests passing** (up from 284; 86% -> 87% line coverage). All four gates verified green *as of the async-coverage commit* — `ruff check .`, `ruff format --check .`, `mypy src/myinvois`, `pytest -m "not live"`. The format gate only became green in that commit; see FORMATTING DRIFT.
 
 The full pipeline is implemented end-to-end and verified to run: build `Invoice` -> `JsonEnvelopeBuilder`/`XmlEnvelopeBuilder` -> `JsonSigner`/`XmlSigner` -> `build_submission_payload` -> `client.submissions.submit_documents`.
 
@@ -128,7 +128,8 @@ Remaining before 1.0:
 - PyPI release automation (CI itself is now in place — see GITHUB section).
 - Document types `02`/`03`/`04`/`11`-`14` (only `01` Invoice is modelled).
 - Live sandbox verification against LHDN preprod.
-- Async test coverage gap: token cache-hit / proactive refresh and HTTP-status -> exception mapping are sync-side only.
+- `tests/unit/test_auth.py::test_token_manager_refresh_margin` is **vacuous**: it never calls `get_token()`, so `is_valid()` returns False only because no token was ever acquired. Proven by re-running it with `expires_in=3600` (far outside the 60s margin) — still passes, 0 calls to the token endpoint. It would pass with the refresh-margin logic deleted. The async twin was strengthened in the Phase 6b coverage PR; fix the sync one the same way (two responses, two `get_token()` calls, assert re-acquisition).
+- `TokenManager.is_valid()` is a **method** but `AsyncTokenManager.is_valid` is a **property** — a real sync/async divergence that breaks the "one-for-one mirror" contract this file and the README both claim. Porting sync code to async hits `TypeError: 'bool' object is not callable`. Found while writing the async auth tests; deliberately left for its own PR.
 
 ## CODE_STATE
 - `src/myinvois/codes/__init__.py` implements curated `StrEnum(_EnumLookupMixin)` tables + `_CodeTable` loader instances; `src/myinvois/codes/_data/*.json` 8 tables = 3,637 rows. Re-extract via `uv run python scripts/extract_codes.py`.
@@ -143,7 +144,7 @@ Remaining before 1.0:
 - `src/myinvois/__init__.py` re-exports `AsyncMyInvoisClient` alongside `MyInvoisClient`.
 
 ## TESTS
-284 passing. 21 of them are the Phase 6a async suite in `tests/unit/test_async_client.py`; the rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token acquisition, the `onbehalfof` header, and `async with` cleanup.
+302 passing. 39 of them are the async suite: `tests/unit/test_async_client.py` (Phase 6a, plus a Phase 6b status-mapping block) and `tests/unit/test_async_auth.py` (Phase 6b). The rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token acquisition, the `onbehalfof` header, and `async with` cleanup.
 
 ## VERSION_CONTROL_STATUS
 Phase 4 commit = `9ce6d48`. Phase 5 commit = `f4327a1`. Phase 6a commit = `80e7e2d` (PR #4). All on `master` (note: branch is `master`, not `main`). 33 files tracked as of Phase 3a; Phases 4-6a added more.
@@ -599,10 +600,15 @@ header propagation on login, each of the five services' happy paths and request
 shapes (incl. Decimal totals, the `error` block passthrough, the reason-length
 guard and raw-string state input), lazy-property caching, and `async with`.
 
-**Coverage gaps vs the sync suite** (worth closing in Phase 6b): no async test
-for token cache-hit / proactive refresh (the `AsyncTokenManager` refresh-ahead
-path and its `asyncio.Lock` are untested), and no async test for HTTP-status ->
-exception mapping. Both are covered on the sync side only.
+**Coverage gaps vs the sync suite — CLOSED.** `tests/unit/test_async_auth.py`
+(new, mirrors `test_auth.py`) plus a status-mapping block in
+`test_async_client.py` now cover token cache-hit, expiry-driven re-acquisition,
+the refresh margin, `invalidate()`, the `asyncio.Lock` stampede collapse, and
+HTTP-status -> exception mapping. `_async_auth.py` 76% -> 92%,
+`_async_client.py` 84% -> 91%.
+
+The lock test is verified to be able to fail: neutering `AsyncTokenManager._lock`
+with a no-op async context manager turns 1 token request into 10.
 
 ## PHASE 6b — Polish + publish (partially DONE)
 
