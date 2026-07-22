@@ -72,7 +72,7 @@ def test_token_manager_acquires_token(respx_mock: Any, token_url: str, mgr: Toke
     tok = mgr.get_token()
 
     assert tok.access_token == "TOK-1"
-    assert mgr.is_valid() is True
+    assert mgr.is_valid is True
 
 
 def test_token_manager_caches_until_expiry(
@@ -115,7 +115,7 @@ def test_token_manager_refresh_margin(respx_mock: Any, token_url: str, mgr: Toke
         return_value=httpx.Response(200, json=_token_response("TOK", expires_in=30))
     )
 
-    assert mgr.is_valid() is False
+    assert mgr.is_valid is False
 
 
 def test_token_manager_raises_on_auth_failure(
@@ -145,7 +145,7 @@ def test_new_token_manager_has_no_token(token_url: str) -> None:
     fresh = TokenManager(
         client_id="cid", client_secret="csecret", token_url=token_url, scope="InvoicingAPI"
     )
-    assert fresh.is_valid() is False
+    assert fresh.is_valid is False
     assert fresh.access_token is None
     assert fresh.token is None
 
@@ -160,4 +160,4 @@ def test_invalidate_drops_cached_token(respx_mock: Any, token_url: str, mgr: Tok
 
     mgr.invalidate()
     assert mgr.access_token is None
-    assert mgr.is_valid() is False
+    assert mgr.is_valid is False

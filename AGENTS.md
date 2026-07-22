@@ -129,7 +129,7 @@ Remaining before 1.0:
 - Document types `02`/`03`/`04`/`11`-`14` (only `01` Invoice is modelled).
 - Live sandbox verification against LHDN preprod.
 - `tests/unit/test_auth.py::test_token_manager_refresh_margin` is **vacuous**: it never calls `get_token()`, so `is_valid()` returns False only because no token was ever acquired. Proven by re-running it with `expires_in=3600` (far outside the 60s margin) — still passes, 0 calls to the token endpoint. It would pass with the refresh-margin logic deleted. The async twin was strengthened in the Phase 6b coverage PR; fix the sync one the same way (two responses, two `get_token()` calls, assert re-acquisition).
-- `TokenManager.is_valid()` is a **method** but `AsyncTokenManager.is_valid` is a **property** — a real sync/async divergence that breaks the "one-for-one mirror" contract this file and the README both claim. Porting sync code to async hits `TypeError: 'bool' object is not callable`. Found while writing the async auth tests; deliberately left for its own PR.
+- `TokenManager` creates its own `httpx.Client` when none is injected but exposes no `close()`, while `AsyncTokenManager` tracks `_owns_client` and has `aclose()`. **Not a live leak** — both clients pass their own `httpx` client in, so the manager never builds one on the normal path; it only bites a bare `TokenManager()`, which is not exported. Low priority.
 
 ## CODE_STATE
 - `src/myinvois/codes/__init__.py` implements curated `StrEnum(_EnumLookupMixin)` tables + `_CodeTable` loader instances; `src/myinvois/codes/_data/*.json` 8 tables = 3,637 rows. Re-extract via `uv run python scripts/extract_codes.py`.
@@ -609,6 +609,13 @@ HTTP-status -> exception mapping. `_async_auth.py` 76% -> 92%,
 
 The lock test is verified to be able to fail: neutering `AsyncTokenManager._lock`
 with a no-op async context manager turns 1 token request into 10.
+
+## SYNC/ASYNC MIRROR CONTRACT — enforced by a test
+`TokenManager.is_valid` was a **method** while `AsyncTokenManager.is_valid` was a **property**, so porting sync code to async raised `TypeError: 'bool' object is not callable`. Neither suite caught it because each only exercised its own side. Resolved by making **both properties** — consistent with `access_token` and `token`, which were already properties on both, and chosen over the reverse because nothing is published yet so there are no callers to break.
+
+`tests/unit/test_async_auth.py::test_managers_expose_the_same_public_surface` now compares the two classes' public members *and their kinds* (`property` vs `function`) via `inspect.getattr_static`, so any future drift fails the build. `aclose` is the single sanctioned async-only member. Verified to catch the original bug: reverting `auth.py` makes it fail with `{'is_valid': ('function', 'property')}`.
+
+**When adding a member to either manager, add it to both** — or add it to the test's sanctioned-difference set with a reason.
 
 ## PHASE 6b — Polish + publish (partially DONE)
 
