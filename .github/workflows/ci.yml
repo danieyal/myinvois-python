@@ -49,6 +49,18 @@ jobs:
       - name: mypy
         run: uv run mypy src/myinvois
 
+      # Pyright is what Pylance runs in the editor, and it catches things mypy
+      # does not: it found a module-level `del` that would have raised
+      # NameError at import time if a constant tuple were ever emptied, while
+      # mypy was green. Scope comes from pyrightconfig.json (src, tests,
+      # scripts) so CI and the IDE cannot drift apart.
+      #
+      # The version is pinned through uv.lock, deliberately: Pyright ships new
+      # checks frequently, and an unpinned upgrade would fail unrelated PRs
+      # with findings nobody introduced.
+      - name: pyright
+        run: uv run pyright
+
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest

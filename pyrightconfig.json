@@ -1,12 +1,14 @@
 {
-  "//": "Pyright/Pylance config. Without this, a fresh clone reports ~78 phantom",
-  "//2": "'could not be resolved' errors for httpx/pydantic/lxml/cryptography,",
-  "//3": "because Pyright does not find .venv on its own. Checked in so the IDE",
-  "//4": "and the command line agree for everyone.",
+  // Pyright/Pylance config. Without venvPath/venv, a fresh clone reports ~78
+  // phantom "could not be resolved" errors for httpx, pydantic, lxml and
+  // cryptography, because Pyright does not find .venv on its own. Checked in
+  // so the IDE, the command line and CI all agree.
   "venvPath": ".",
   "venv": ".venv",
   "include": ["src", "tests", "scripts"],
-  "exclude": ["**/__pycache__", ".venv", "dist"],
+  // Specifying `exclude` replaces Pyright's defaults, so the usual ones are
+  // repeated here rather than silently dropped.
+  "exclude": ["**/node_modules", "**/.*", "**/__pycache__", ".venv", "dist"],
   "pythonVersion": "3.11",
   "typeCheckingMode": "standard",
   "reportMissingTypeStubs": false
