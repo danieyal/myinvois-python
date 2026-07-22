@@ -46,6 +46,21 @@ _FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 ALL_DOCUMENT_TYPE_CODES = ("01", "02", "03", "04", "11", "12", "13", "14")
 
 
+def _substitute_once(document: str, marker: str, replacement: str) -> str:
+    """Replace ``marker`` exactly once, failing loudly if it is not unique.
+
+    The expected document below is built by string substitution. If the marker
+    ever stops matching -- a reordered attribute, a reformatted leaf -- a plain
+    ``str.replace`` would quietly do nothing and hand back an expectation that
+    no longer means what the test claims. Assert the marker is present exactly
+    once so that shows up as a clear failure here rather than as a confusing
+    mismatch downstream.
+    """
+    found = document.count(marker)
+    assert found == 1, f"expected exactly one occurrence of {marker!r}, found {found}"
+    return document.replace(marker, replacement, 1)
+
+
 def _xml_for(code: str) -> str:
     invoice = _sample_invoice()
     invoice.invoice_type_code = code
@@ -99,16 +114,18 @@ class TestCreditNoteReferenceParity:
 class TestOnlyTheTypeCodeVaries:
     def test_xml_differs_from_invoice_only_in_the_type_code(self, code: str) -> None:
         baseline = (_FIXTURES / "golden_invoice_unsigned.xml").read_text(encoding="utf-8")
-        expected = baseline.replace(
+        expected = _substitute_once(
+            baseline,
             '<cbc:InvoiceTypeCode listVersionID="1.0">01</cbc:InvoiceTypeCode>',
             f'<cbc:InvoiceTypeCode listVersionID="1.0">{code}</cbc:InvoiceTypeCode>',
         )
         assert _xml_for(code) == expected
 
     def test_json_differs_from_invoice_only_in_the_type_code(self, code: str) -> None:
-        baseline = _json_for("01")
-        expected = baseline.replace(
-            '"InvoiceTypeCode":[{"_":"01","listVersionID":"1.0"}]',
+        baseline = (_FIXTURES / "golden_creditnote_unsigned.json").read_text(encoding="utf-8")
+        expected = _substitute_once(
+            baseline,
+            '"InvoiceTypeCode":[{"_":"02","listVersionID":"1.0"}]',
             f'"InvoiceTypeCode":[{{"_":"{code}","listVersionID":"1.0"}}]',
         )
         assert _json_for(code) == expected
