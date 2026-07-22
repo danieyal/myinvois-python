@@ -95,7 +95,14 @@ class XmlEnvelopeBuilder:
 
         url = ENVELOPE_DOCUMENT_TAGS.get(tag_name)
         if url is None:
-            url = f"urn:oasis:names:specification:ubl:schema:xsd:{tag_name}-2"
+            # See the matching comment in json.py: no UBL-pattern fallback,
+            # because a synthesised namespace produces a well-formed document
+            # that LHDN rejects for reasons the payload does not reveal.
+            raise ValueError(
+                f"Unsupported UBL document tag {tag_name!r}. MyInvois carries every "
+                f"document type on the 'Invoice' envelope, distinguished by "
+                f"InvoiceTypeCode -- set invoice_type_code, not xml_tag_name."
+            )
         return url
 
     def _document_currency_code(self) -> str:

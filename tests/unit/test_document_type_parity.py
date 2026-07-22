@@ -143,7 +143,42 @@ class TestOnlyTheTypeCodeVaries:
 
 
 # ---------------------------------------------------------------------------
-# 3. The enum agrees with the wire codes
+# 3. Only the Invoice envelope is permitted
+# ---------------------------------------------------------------------------
+
+
+class TestOnlyTheInvoiceEnvelopeIsPermitted:
+    """A non-``Invoice`` root must fail loudly, not be synthesised.
+
+    Both builders used to fall back to the standard UBL pattern
+    (``urn:...:xsd:<Tag>-2``) for an unrecognised tag. That turned a mistake
+    into a well-formed document in the wrong namespace -- accepted by our
+    serializer, rejected by LHDN, with nothing in the payload to explain why.
+    """
+
+    def test_envelope_table_lists_only_invoice(self) -> None:
+        from myinvois.ubl.builders._specs import ENVELOPE_DOCUMENT_TAGS
+
+        assert set(ENVELOPE_DOCUMENT_TAGS) == {"Invoice"}
+
+    @pytest.mark.parametrize("bogus", ["CreditNote", "SelfBilledInvoice", "Nonsense"])
+    @pytest.mark.parametrize(
+        "builder_cls,method",
+        [(XmlEnvelopeBuilder, "build_xml"), (JsonEnvelopeBuilder, "build_json")],
+    )
+    def test_non_invoice_root_is_rejected(self, builder_cls: type, method: str, bogus: str) -> None:
+        invoice = _sample_invoice()
+        # `xml_tag_name` is a ClassVar on the model, so override per-instance
+        # through the type to simulate a future document class getting it wrong.
+        impostor = type(f"Impostor{bogus}", (type(invoice),), {"xml_tag_name": bogus})
+        forged = impostor.model_construct(**dict(invoice))
+
+        with pytest.raises(ValueError, match="Invoice"):
+            getattr(builder_cls(forged), method)()
+
+
+# ---------------------------------------------------------------------------
+# 4. The enum agrees with the wire codes
 # ---------------------------------------------------------------------------
 
 

@@ -22,17 +22,22 @@ UBL_NAMESPACES: Final[dict[str, str]] = {
 }
 
 #: Full default-namespace URL per supported UBL document xmlTagName.
-#: Maps a document's ``xmlTagName`` to the ``_D`` value emitted in the JSON
-#: envelope (``urn:oasis:names:specification:ubl:schema:xsd:<Tag>-2``).
+#:
+#: **``Invoice`` is the only valid entry, for every one of the eight MyInvois
+#: document types.** MyInvois does not use UBL's per-document root elements: a
+#: credit note is not ``<CreditNote>`` in the ``CreditNote-2`` namespace. Every
+#: type rides the ``Invoice`` envelope and is distinguished only by
+#: ``cbc:InvoiceTypeCode`` (``01``-``04``, ``11``-``14``). The reference
+#: implementation overrides the UBL default back to ``Invoice`` explicitly, and
+#: does the same for ``CreditNoteLine`` -> ``InvoiceLine`` and
+#: ``CreditedQuantity`` -> ``InvoicedQuantity``.
+#:
+#: This previously listed ``CreditNote-2``, ``SelfBilledInvoice-2`` and friends.
+#: They were unreachable -- ``xml_tag_name`` is only ever ``"Invoice"`` -- but
+#: they encoded the wrong belief, and wiring them up would have produced
+#: documents LHDN rejects. Pinned by ``tests/unit/test_document_type_parity.py``.
 ENVELOPE_DOCUMENT_TAGS: Final[dict[str, str]] = {
     "Invoice": "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2",
-    "CreditNote": "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2",
-    "DebitNote": "urn:oasis:names:specification:ubl:schema:xsd:DebitNote-2",
-    "RefundNote": "urn:oasis:names:specification:ubl:schema:xsd:RefundNote-2",
-    "SelfBilledInvoice": "urn:oasis:names:specification:ubl:schema:xsd:SelfBilledInvoice-2",
-    "SelfBilledCreditNote": ("urn:oasis:names:specification:ubl:schema:xsd:SelfBilledCreditNote-2"),
-    "SelfBilledDebitNote": ("urn:oasis:names:specification:ubl:schema:xsd:SelfBilledDebitNote-2"),
-    "SelfBilledRefundNote": ("urn:oasis:names:specification:ubl:schema:xsd:SelfBilledRefundNote-2"),
 }
 
 #: e-Invoice v1.0 (unsigned) vs v1.1 (digitally signed). The Invoice's
