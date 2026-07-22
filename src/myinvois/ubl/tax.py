@@ -71,10 +71,11 @@ class TaxCategory(_UblModel):
 
     @model_validator(mode="after")
     def _must_have_id_and_tax_scheme(self) -> TaxCategory:
+        # `id` is `str`, so the empty string gets through Pydantic and this
+        # check is load-bearing. `tax_scheme` is required and non-Optional, so
+        # a None check there would be unreachable.
         if not self.id:
             raise ValueError("TaxCategory.id is required")
-        if self.tax_scheme is None:
-            raise ValueError("TaxCategory.tax_scheme is required")
         return self
 
     @property
@@ -126,14 +127,6 @@ class TaxSubTotal(_UblModel):
     def _to_decimal(cls, v: Any) -> Any:
         return _money(v)
 
-    @model_validator(mode="after")
-    def _must_have_amount_and_category(self) -> TaxSubTotal:
-        if self.tax_amount is None:
-            raise ValueError("TaxSubTotal.tax_amount is required")
-        if self.tax_category is None:
-            raise ValueError("TaxSubTotal.tax_category is required")
-        return self
-
     @model_serializer
     def _ser(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -168,8 +161,9 @@ class TaxTotal(_UblModel):
 
     @model_validator(mode="after")
     def _must_have_amount_and_subtotals(self) -> TaxTotal:
-        if self.tax_amount is None:
-            raise ValueError("TaxTotal.tax_amount is required")
+        # `tax_amount` needs no check: it is required and non-Optional, so
+        # Pydantic rejects a missing or None value before this runs. Only the
+        # empty-list case is reachable -- `list` accepts `[]` happily.
         if not self.tax_sub_totals:
             raise ValueError("TaxTotal.tax_sub_totals must contain at least one TaxSubTotal")
         return self
