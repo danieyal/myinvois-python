@@ -20,7 +20,7 @@ import httpx
 import pytest
 
 from myinvois._async_auth import AsyncTokenManager
-from myinvois.auth import OAuth2Token
+from myinvois.auth import OAuth2Token, TokenManager
 from myinvois.config import Environment, base_identity_url
 from myinvois.exceptions import AuthenticationError, MyInvoisError
 
@@ -65,6 +65,38 @@ def _expire_now(mgr: AsyncTokenManager) -> None:
         token_type=current.token_type,
         expires_at=mgr._clock() - 1,
     )
+
+
+# ===== sync/async parity =====
+
+
+def test_managers_expose_the_same_public_surface() -> None:
+    """Pin the "one-for-one mirror" contract that AGENTS.md and the README claim.
+
+    ``is_valid`` was previously a method on ``TokenManager`` but a property on
+    ``AsyncTokenManager``, so porting sync code to async raised
+    ``TypeError: 'bool' object is not callable`` at runtime. Nothing caught it
+    because each suite only exercised its own side.
+
+    ``aclose`` is the one sanctioned difference: it has no sync counterpart.
+    """
+    import inspect
+
+    def surface(cls: type) -> dict[str, str]:
+        return {
+            name: type(inspect.getattr_static(cls, name)).__name__
+            for name in dir(cls)
+            if not name.startswith("_")
+        }
+
+    sync, async_ = surface(TokenManager), surface(AsyncTokenManager)
+
+    assert set(async_) - set(sync) == {"aclose"}
+    assert set(sync) - set(async_) == set()
+
+    shared = set(sync) & set(async_)
+    mismatched = {name: (sync[name], async_[name]) for name in shared if sync[name] != async_[name]}
+    assert not mismatched, f"sync/async member kind drift: {mismatched}"
 
 
 # ===== caching and refresh =====

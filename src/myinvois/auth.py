@@ -113,6 +113,7 @@ class TokenManager:
 
     # ----- introspection -------------------------------------------------
 
+    @property
     def is_valid(self) -> bool:
         tok = self._stored.value
         if tok is None:
