@@ -152,7 +152,7 @@ Phase 4 commit = `9ce6d48`. Phase 5 commit = `f4327a1`. Phase 6a commit = `80e7e
 Repo: **https://github.com/danieyal/myinvois-python** (public).
 Remote `origin` → `https://github.com/danieyal/myinvois-python.git`. Default branch is `master`. Topics: `myinvois`, `lhdn`, `e-invoice`, `malaysia`, `python`, `pydantic`, `ubl`, `xades`, `digital-signature`, `sdk`.
 
-CI (DONE, Phase 6b): `.github/workflows/ci.yml`, three jobs — `lint` (ruff check + ruff format --check + mypy), `test` (pytest matrix 3.11/3.12/3.13, `-m "not live"`), `package` (uv build + `scripts/check_dist.py`, uploads the dists as an artifact). Runs on push-to-master, every PR, and `workflow_dispatch`; `UV_FROZEN=1` so a stale `uv.lock` fails the build instead of silently resolving differently.
+CI (DONE, Phase 6b): `.github/workflows/ci.yml`, three jobs — `lint` (ruff check + ruff format --check + mypy), `test` (pytest matrix 3.11/3.12/3.13, `-m "not live"`), `package` (uv build + `scripts/check_dist.py`, uploads the dists as an artifact). Runs on push-to-master, every PR, and `workflow_dispatch`. Workflow-level `permissions: contents: read` and `persist-credentials: false` on every checkout (least privilege; nothing in CI writes to the repo). `UV_LOCKED=1` so a stale `uv.lock` fails the build instead of silently resolving differently — **`UV_LOCKED`, not `UV_FROZEN`**: `--frozen` skips re-locking *without* checking, so it would not catch the drift.
 
 Release automation (TODO): GitHub Actions Trusted Publishing → PyPI on tag `v*`. Gate it on the `package` job. **Publishing under the `myinvois` name is outward-facing and irreversible per-version — confirm with the user before the first release.**
 

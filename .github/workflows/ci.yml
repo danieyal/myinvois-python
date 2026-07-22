@@ -10,6 +10,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: nothing here needs to write to the repo. Declaring this at
+# the workflow level also overrides a permissive repo/org default.
+permissions:
+  contents: read
+
 env:
   # Assert uv.lock is up to date with pyproject.toml and install exactly what
   # it pins, rather than silently resolving something different from what
@@ -23,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Don't leave GITHUB_TOKEN in .git/config for later steps to reach.
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -50,6 +58,9 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Don't leave GITHUB_TOKEN in .git/config for later steps to reach.
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -71,6 +82,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Don't leave GITHUB_TOKEN in .git/config for later steps to reach.
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5

@@ -33,8 +33,8 @@ from pathlib import Path
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
 
-# Files that must be present in the wheel, relative to the package root.
-REQUIRED_WHEEL_MEMBERS = (
+# Non-Python files that must ship, as paths relative to the package root.
+REQUIRED_DATA_MEMBERS = (
     "myinvois/py.typed",
     "myinvois/codes/_data/classification.json",
     "myinvois/codes/_data/countries.json",
@@ -45,6 +45,13 @@ REQUIRED_WHEEL_MEMBERS = (
     "myinvois/codes/_data/taxes.json",
     "myinvois/codes/_data/units.json",
 )
+
+# The same files live at different prefixes in each distribution: the wheel is
+# already package-rooted, while the sdist keeps the repo's `src/` layout. Both
+# are checked -- `pip install --no-binary` builds from the sdist, so a
+# `data-includes` regression there breaks installs just as badly, and would go
+# unnoticed if only the wheel were validated.
+REQUIRED_MEMBER_PREFIXES = {"wheel": "", "sdist": "src/"}
 
 # Anything matching these must NOT appear in either distribution. Keyed on the
 # path so a source module such as `ubl/signing/_cert.py` (legitimate) is not
@@ -90,12 +97,18 @@ def main() -> int:
 
     problems: list[str] = []
 
-    missing = [m for m in REQUIRED_WHEEL_MEMBERS if m not in wheel_members]
-    for member in missing:
-        problems.append(
-            f"{wheel.name}: missing required member {member!r} -- check the "
-            "`[tool.uv.build-backend] data-includes` entry in pyproject.toml"
-        )
+    for kind, label, members in (
+        ("wheel", wheel.name, wheel_members),
+        ("sdist", sdist.name, sdist_members),
+    ):
+        prefix = REQUIRED_MEMBER_PREFIXES[kind]
+        present = set(members)
+        for member in REQUIRED_DATA_MEMBERS:
+            if f"{prefix}{member}" not in present:
+                problems.append(
+                    f"{label}: missing required member {prefix + member!r} -- check the "
+                    "`[tool.uv.build-backend] data-includes` entry in pyproject.toml"
+                )
 
     for label, members in ((wheel.name, wheel_members), (sdist.name, sdist_members)):
         for member in members:
@@ -116,7 +129,7 @@ def main() -> int:
 
     scanned = len(wheel_members) + len(sdist_members)
     print(f"Distribution check passed: {wheel.name}, {sdist.name}")
-    print(f"  {len(REQUIRED_WHEEL_MEMBERS)} required members present")
+    print(f"  {len(REQUIRED_DATA_MEMBERS)} required members present in wheel and sdist")
     print(f"  no test fixtures or key material in {scanned} entries")
     return 0
 
