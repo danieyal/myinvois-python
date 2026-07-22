@@ -63,6 +63,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.7",
     "mypy>=1.13",
+    "lxml-stubs>=0.5.1",
 ]
 
 [tool.ruff]
@@ -89,10 +90,6 @@ plugins = ["pydantic.mypy"]
 init_typed = false
 warn_required_dynamic_outputs = true
 warn_untyped_fields = true
-
-[[tool.mypy.overrides]]
-module = ["lxml.*"]
-ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
