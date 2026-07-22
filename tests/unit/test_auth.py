@@ -8,6 +8,7 @@ so routes are wired into an active router for the duration of each test.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -65,7 +66,7 @@ def test_oauth2_token_rejects_missing_access() -> None:
 
 
 def test_token_manager_acquires_token(respx_mock: Any, token_url: str, mgr: TokenManager) -> None:
-    respx_mock.post(token_url).mock(
+    route = respx_mock.post(token_url).mock(
         return_value=httpx.Response(200, json=_token_response("TOK-1", expires_in=3600))
     )
 
@@ -73,6 +74,18 @@ def test_token_manager_acquires_token(respx_mock: Any, token_url: str, mgr: Toke
 
     assert tok.access_token == "TOK-1"
     assert mgr.is_valid is True
+
+    # Pin the outgoing form too. Nothing else asserts the grant payload, so a
+    # typo in `_build_form` (e.g. "client_credential") would otherwise pass
+    # every test and only fail against the real LHDN token endpoint.
+    # Mirrors `test_async_auth.py::test_async_token_manager_acquires_token`.
+    sent = parse_qs(route.calls.last.request.content.decode())
+    assert sent == {
+        "client_id": ["cid"],
+        "client_secret": ["csecret"],
+        "grant_type": ["client_credentials"],
+        "scope": ["InvoicingAPI"],
+    }
 
 
 def test_token_manager_caches_until_expiry(
@@ -109,13 +122,30 @@ def test_token_manager_reacquires_after_expiry(
 
 
 def test_token_manager_refresh_margin(respx_mock: Any, token_url: str, mgr: TokenManager) -> None:
-    # expires_in 30 → within default 60s refresh margin → manager treats fresh
-    # token as already-stale so the next get_token() must re-hit the wire.
-    respx_mock.post(token_url).mock(
-        return_value=httpx.Response(200, json=_token_response("TOK", expires_in=30))
+    """A token expiring inside the refresh margin must be re-acquired.
+
+    Asserting only ``is_valid`` would be weak: ``get_token`` does not consult
+    that property, it re-checks ``is_expired`` itself. So this drives the real
+    path -- a second ``get_token`` must go back to the wire and return the new
+    token, not hand back the still-unexpired-but-stale first one.
+
+    Mirrors ``test_async_auth.py::test_async_token_manager_refresh_margin``.
+    """
+    route = respx_mock.post(token_url).mock(
+        side_effect=[
+            # expires_in 30 is inside the default 60s refresh margin, so this
+            # token counts as stale the moment it arrives.
+            httpx.Response(200, json=_token_response("STALE", expires_in=30)),
+            httpx.Response(200, json=_token_response("FRESH", expires_in=3600)),
+        ]
     )
 
+    assert mgr.get_token().access_token == "STALE"
     assert mgr.is_valid is False
+
+    assert mgr.get_token().access_token == "FRESH"
+    assert route.call_count == 2
+    assert mgr.is_valid is True
 
 
 def test_token_manager_raises_on_auth_failure(
