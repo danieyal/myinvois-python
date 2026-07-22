@@ -20,6 +20,15 @@ from .common import (
     Shipment,
     TaxExchangeRate,
 )
+from .documents import (
+    CreditNote,
+    DebitNote,
+    RefundNote,
+    SelfBilledCreditNote,
+    SelfBilledDebitNote,
+    SelfBilledInvoice,
+    SelfBilledRefundNote,
+)
 from .invoice import Invoice
 from .line import (
     CommodityClassification,
@@ -59,6 +68,8 @@ __all__ = [
     "CommodityClassification",
     "Contact",
     "Country",
+    "CreditNote",
+    "DebitNote",
     "Delivery",
     "FinancialInstitutionBranch",
     "Invoice",
@@ -78,6 +89,11 @@ __all__ = [
     "PaymentTerms",
     "PrepaidPayment",
     "Price",
+    "RefundNote",
+    "SelfBilledCreditNote",
+    "SelfBilledDebitNote",
+    "SelfBilledInvoice",
+    "SelfBilledRefundNote",
     "SettlementPeriod",
     "Shipment",
     "TaxCategory",
