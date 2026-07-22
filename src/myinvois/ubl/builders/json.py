@@ -87,8 +87,16 @@ class JsonEnvelopeBuilder:
         name = self._document_tag_name()
         url = ENVELOPE_DOCUMENT_TAGS.get(name)
         if url is None:
-            # Fall back to the standard UBL pattern rather than hard-fail.
-            url = f"urn:oasis:names:specification:ubl:schema:xsd:{name}-2"
+            # Deliberately not falling back to the standard UBL pattern
+            # (``...:<Tag>-2``). MyInvois accepts only the ``Invoice``
+            # envelope; synthesising e.g. ``CreditNote-2`` would emit a
+            # well-formed document that LHDN rejects, with nothing in the
+            # payload to explain why. Fail here instead.
+            raise ValueError(
+                f"Unsupported UBL document tag {name!r}. MyInvois carries every "
+                f"document type on the 'Invoice' envelope, distinguished by "
+                f"InvoiceTypeCode -- set invoice_type_code, not xml_tag_name."
+            )
         return url
 
     def _document_currency_code(self) -> str:
