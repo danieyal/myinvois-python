@@ -70,8 +70,15 @@ class XmlEnvelopeBuilder:
 
         # Root element owns all four xmlns declarations. lxml uses ``None`` as
         # the nsmap key for the default namespace so the root tag is unprefixed.
+        #
+        # `lxml-stubs` types nsmap as Mapping[str, str], which cannot express
+        # that None key -- a gap in the stubs, not in lxml: passing None is the
+        # documented way to declare a default namespace, and the golden
+        # fixtures depend on it emitting `<Invoice xmlns="...">`. Suppressed
+        # narrowly rather than widening the annotation, which would hide real
+        # misuse of this call.
         nsmap = {None: ns_url, "cac": _NS_CAC, "cbc": _NS_CBC, "ext": _NS_EXT}
-        root = etree.Element(f"{{{ns_url}}}{tag_name}", nsmap=nsmap)
+        root = etree.Element(f"{{{ns_url}}}{tag_name}", nsmap=nsmap)  # type: ignore[arg-type]
 
         content = self._content_dump()
         self._stamp_currency(content, self._document_currency_code())
