@@ -16,7 +16,13 @@ import pytest
 
 from myinvois._async_client import AsyncMyInvoisClient
 from myinvois.config import Environment, base_api_url, base_identity_url
-from myinvois.exceptions import ValidationError
+from myinvois.exceptions import (
+    AuthenticationError,
+    MyInvoisError,
+    NotFoundError,
+    RateLimitError,
+    ValidationError,
+)
 from myinvois.services.async_documents import AsyncDocumentsService
 from myinvois.services.async_submissions import AsyncSubmissionsService
 from myinvois.services.models import DocumentStateChangeResponse, GetSubmissionResponse
@@ -346,3 +352,69 @@ async def test_async_context_manager(respx_mock: Any) -> None:
         assert c.access_token is None  # not logged in yet
         tok = await c.login()
         assert tok == "test-token"
+
+
+# ===== HTTP status -> exception mapping =====
+#
+# The async client has its own copy of the response-handling chain, so the
+# equivalent sync assertions in test_client.py do not cover it.
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (400, ValidationError),
+        (401, AuthenticationError),
+        (403, AuthenticationError),
+        (404, NotFoundError),
+        (429, RateLimitError),
+        (500, MyInvoisError),
+    ],
+)
+async def test_async_request_maps_status_to_exception(
+    client: AsyncMyInvoisClient,
+    respx_mock: Any,
+    status: int,
+    expected: type[MyInvoisError],
+) -> None:
+    respx_mock.get(_API + "/api/v1.0/documents").mock(
+        return_value=httpx.Response(status, json={"error": {"code": "E", "message": "nope"}})
+    )
+
+    await client.login()
+    with pytest.raises(expected) as ex:
+        await client.request("GET", "/api/v1.0/documents")
+    assert ex.value.status_code == status
+
+
+async def test_async_request_surfaces_server_error_message(
+    client: AsyncMyInvoisClient, respx_mock: Any
+) -> None:
+    respx_mock.get(_API + "/api/v1.0/documents").mock(
+        return_value=httpx.Response(400, json={"error": {"code": "X", "message": "bad TIN"}})
+    )
+
+    await client.login()
+    with pytest.raises(ValidationError, match="bad TIN"):
+        await client.request("GET", "/api/v1.0/documents")
+
+
+async def test_async_request_handles_non_json_error_body(
+    client: AsyncMyInvoisClient, respx_mock: Any
+) -> None:
+    respx_mock.get(_API + "/api/v1.0/documents").mock(
+        return_value=httpx.Response(503, text="upstream unavailable")
+    )
+
+    await client.login()
+    with pytest.raises(MyInvoisError, match="upstream unavailable"):
+        await client.request("GET", "/api/v1.0/documents")
+
+
+async def test_async_request_returns_none_for_204(
+    client: AsyncMyInvoisClient, respx_mock: Any
+) -> None:
+    respx_mock.get(_API + "/api/v1.0/documents").mock(return_value=httpx.Response(204))
+
+    await client.login()
+    assert await client.request("GET", "/api/v1.0/documents") is None
