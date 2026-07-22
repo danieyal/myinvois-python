@@ -128,6 +128,7 @@ Remaining before 1.0:
 - PyPI release automation (CI itself is now in place — see GITHUB section).
 - Document types `02`/`03`/`04`/`11`-`14` (only `01` Invoice is modelled).
 - Live sandbox verification against LHDN preprod.
+- `tests/unit/test_auth.py::test_token_manager_refresh_margin` is **vacuous**: it never calls `get_token()`, so `is_valid()` returns False only because no token was ever acquired. Proven by re-running it with `expires_in=3600` (far outside the 60s margin) — still passes, 0 calls to the token endpoint. It would pass with the refresh-margin logic deleted. The async twin was strengthened in the Phase 6b coverage PR; fix the sync one the same way (two responses, two `get_token()` calls, assert re-acquisition).
 - `TokenManager.is_valid()` is a **method** but `AsyncTokenManager.is_valid` is a **property** — a real sync/async divergence that breaks the "one-for-one mirror" contract this file and the README both claim. Porting sync code to async hits `TypeError: 'bool' object is not callable`. Found while writing the async auth tests; deliberately left for its own PR.
 
 ## CODE_STATE
