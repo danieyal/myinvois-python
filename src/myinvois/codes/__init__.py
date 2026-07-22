@@ -89,16 +89,25 @@ class _CodeTable:
     # --- internals --------------------------------------------------------
 
     def _rows(self) -> list[dict[str, str]]:
-        if self._rows_cache is None:
+        # Read through a local so the return is provably non-None. Returning
+        # the attribute directly leaves it typed `list[...] | None`, because an
+        # instance attribute can be reassigned between the check and the
+        # return -- which is exactly what a caller mutating `_rows_cache`
+        # would do.
+        rows = self._rows_cache
+        if rows is None:
             pkg = "myinvois.codes._data"
             text = resources.files(pkg).joinpath(self._filename).read_text(encoding="utf-8")
-            self._rows_cache = json.loads(text)
-        return self._rows_cache
+            rows = json.loads(text)
+            self._rows_cache = rows
+        return rows
 
     def _index(self) -> dict[str, dict[str, str]]:
-        if self._index_cache is None:
-            self._index_cache = {row[self._code_field]: row for row in self._rows()}
-        return self._index_cache
+        index = self._index_cache
+        if index is None:
+            index = {row[self._code_field]: row for row in self._rows()}
+            self._index_cache = index
+        return index
 
 
 # ---------------------------------------------------------------------------
