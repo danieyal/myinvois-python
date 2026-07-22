@@ -312,11 +312,24 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
   XAdES digest inputs) were derived from LHDN's documentation and frozen as
   golden fixtures. Those tests prove the output is *deterministic and
   unchanged*, not that LHDN's validator accepts it.
-- **Not yet verified against a live LHDN environment.** Submission against the
-  preprod sandbox with a real certificate is still outstanding. Treat acceptance
-  as unproven until then.
-- Signing requires an LHDN-issued certificate; the SDK never reads credentials
-  implicitly — you pass a `CertConfig` explicitly.
+
+- **Signing is verified against fixtures, not against LHDN.** The XAdES output
+  is pinned byte-for-byte against golden fixtures, and its element structure
+  matches LHDN's own published signed sample (element paths, not every
+  attribute value). But no document has been signed with a
+  CA-issued certificate and accepted by LHDN's validator, because signing
+  requires a certificate from an approved Malaysian CA. **Producing a signature
+  LHDN accepts is therefore unproven.** If you are evaluating this library for
+  production use, this is the risk to weigh.
+
+- **What *has* been verified live:** authentication and the read-only endpoints,
+  against the preprod sandbox — token issuance, document-type listing and TIN
+  validation all round-trip and parse correctly. Submission has not been
+  exercised. See `tests/live/`.
+
+- Signing requires a certificate issued by an approved Malaysian CA — LHDN does
+  not issue them. The SDK never reads credentials implicitly; you pass a
+  `CertConfig` explicitly.
 
 ## Development
 
@@ -343,7 +356,10 @@ Remaining before 1.0:
 - Trusted-Publishing release to PyPI. (CI is in place: ruff, mypy and the test
   suite run on Python 3.11–3.13, plus a check that the built wheel and sdist
   ship the code tables and no signing material.)
-- Live sandbox verification against the LHDN preprod environment.
+- Live **submission** to the LHDN preprod sandbox. Authentication and the
+  read-only endpoints are already verified there; submitting a signed document
+  needs a certificate from an approved Malaysian CA, so signing remains
+  fixture-verified only.
 
 ## Disclaimer
 

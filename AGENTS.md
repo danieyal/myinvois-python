@@ -116,7 +116,7 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 4: digital signature (XmlSigner + JsonSigner, byte-for-byte PHP parity, commit `9ce6d48`, 232 tests)
 - [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `f4327a1`, 260 tests)
 - [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services, commit `80e7e2d` / PR #4, 284 tests)
-- [~] Phase 6b: polish + publish — CI, packaging metadata, all 8 document types + named classes DONE; PyPI Trusted Publishing and live sandbox verification still TODO
+- [~] Phase 6b: polish + publish — CI, packaging metadata, all 8 document types + named classes DONE; live sandbox read-only half DONE; PyPI Trusted Publishing and live *submission* (needs a CA cert) still TODO
 
 ## CURRENT_STATE
 Phases 0-6a done; Phase 6b partially done (CI, packaging, async coverage, all 8 document types + named classes). **405 tests passing** (up from 302). All four gates verified green *as of the document-classes commit* — `ruff check .`, `ruff format --check .`, `mypy src/myinvois`, `pytest -m "not live"`. The format gate only became green in that commit; see FORMATTING DRIFT.
@@ -126,7 +126,7 @@ The full pipeline is implemented end-to-end and verified to run: build `Invoice`
 Remaining before 1.0:
 
 - PyPI release automation (CI itself is now in place — see GITHUB section).
-- Live sandbox verification against LHDN preprod.
+- Live **submission** to LHDN preprod. Read-only endpoints are already verified there; submission needs a CA-issued certificate, so signing remains fixture-verified only.
 - Lesson from the two refresh-margin tests: **a passing test is not a testing test.** `test_token_manager_refresh_margin` was vacuous for the whole life of the sync suite — it never called `get_token()`, so `is_valid` was False merely because no token existed, and it would have passed with the refresh-ahead logic deleted. `auth.py` sat at 95% line coverage throughout, because coverage counts executed lines, not meaningful assertions. Both twins now drive the real path: acquire a token that expires inside the **default 60s margin**, call `get_token()` again, and assert it returns the fresh token with the route hit twice. Their sensitivity was confirmed by a throwaway **mutation run** — a scratch copy with `refresh_margin=0`, where the second call returns the cached token and the assertions fail. That mutation check is *not* part of the suite; re-do it by hand if you touch the refresh-ahead logic. When a test pins behaviour that matters, check it can fail.
 - `TokenManager` creates its own `httpx.Client` when none is injected but exposes no `close()`, while `AsyncTokenManager` tracks `_owns_client` and has `aclose()`. **Not a live leak** — both clients pass their own `httpx` client in, so the manager never builds one on the normal path; it only bites a bare `TokenManager()`, which is not exported. Low priority.
 
@@ -174,7 +174,7 @@ Before Phase 6b, `ruff format --check .` **failed on 4 files** on `master`: `_as
 - [x] Phase 4: digital signature
 - [x] Phase 5: submit + state services
 - [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services)
-- [~] Phase 6b: polish + publish — CI, packaging metadata, all 8 document types + named classes DONE; PyPI Trusted Publishing and live sandbox verification still TODO
+- [~] Phase 6b: polish + publish — CI, packaging metadata, all 8 document types + named classes DONE; live sandbox read-only half DONE; PyPI Trusted Publishing and live *submission* (needs a CA cert) still TODO
 
 ## PHASE 4 — Digital signature (TDD, in flight)
 
@@ -623,7 +623,24 @@ with a no-op async context manager turns 1 token request into 10.
 3. **`CERTIFY_BEFORE_PUBLIC` — RESOLVED.** Verified empirically: neither the wheel nor the sdist ships `tests/` or `tests/fixtures/cert/*`. The wheel carries only `myinvois/**` + `dist-info`; the sdist carries `PKG-INFO`, `README.md`, `pyproject.toml`, `src/`. `scripts/check_dist.py` now enforces this in CI, so the Phase 4 worry is closed rather than merely observed.
 4. **Release** — TODO. GitHub Actions Trusted Publishing to PyPI on tag `v*`, gated on the `package` job. **Outward-facing and irreversible per-version: confirm with the user before the first publish.**
 5. **All eight document types** — **DONE**, and the premise here was wrong. This entry assumed seven new models were needed. In fact the serializers already produced byte-identical output to the reference for every type code; the only change required was setting `invoice_type_code`. **MyInvois does not use UBL's per-document root elements** — a credit note is not `<CreditNote>` in `CreditNote-2`; every type rides the `Invoice` envelope and differs only by `cbc:InvoiceTypeCode`. The reference overrides the UBL default back to `Invoice` explicitly, and likewise maps `CreditNoteLine` -> `InvoiceLine` and `CreditedQuantity` -> `InvoicedQuantity`. See SYNC/ASYNC MIRROR CONTRACT's sibling section DOCUMENT TYPES below.
-6. **Live sandbox verification** — TODO. Run the full build/sign/submit pipeline against `preprod-api.myinvois.hasil.gov.my` with a real LHDN cert. Everything so far is verified against PHP-SDK goldens, which is a proxy for (not proof of) LHDN validator acceptance.
+6. **Live sandbox verification** — **PARTIALLY DONE.** Read-only half is green against `preprod-api.myinvois.hasil.gov.my`: token issuance, `document_types.list()`, and `taxpayer.validate_tin()` (LHDN confirms a real TIN/BRN pair). See `tests/live/test_sandbox.py`. **Submission is still unproven** and blocked on a certificate from an approved Malaysian CA (MSC Trustgate, Pos Digicert) — a procurement step, not a code problem. Until then, signing is verified against fixtures only; say so plainly in user-facing docs.
+
+## LHDN'S PUBLISHED SIGNATURE SAMPLES — compared, deliberately not copied
+`https://sdk.myinvois.hasil.gov.my/signature/` links two signed samples: `/files/one-doc-signed.xml` and `/files/sample-ul-invoice-2.1-signed.min.json`. Downloaded and compared against `tests/fixtures/golden_invoice_signed.{xml,json}`.
+
+**They are NOT a numeric oracle.** The page's worked values are placeholders: `DocDigest` and `PropsDigest` are printed as the *same* string (impossible for real digests over different inputs), `X509IssuerName` is literally `"Company Name"`, and `CertDigest` is truncated mid-value. LHDN states the sample "is for digital signature illustration purposes only". There is also **no downloadable test certificate**, so the page does not unblock signing.
+
+**As a structural check it was worth it.** Our XML signature is *structurally* identical to the sample: 44 signature-related elements each, with no missing or extra element paths, and `Reference 1` matching in attributes and children. Note the scope of that claim — it compares element paths and presence, **not** attribute values, and it is not byte-for-byte: `Reference 2`'s `Type` value differs (see the table below). That is still the first *official* corroboration of a structure otherwise derived from the community PHP SDK.
+
+**Two discrepancies, both left unfixed on purpose:**
+
+| Where | LHDN sample | Ours |
+|---|---|---|
+| XML `Reference 2` `Type` | `http://www.w3.org/2000/09/xmldsig#SignatureProperties` | `http://uri.etsi.org/01903/v1.3.2#SignedProperties` |
+| JSON `Reference` order | SignedProperties first, document second | document first, SignedProperties second |
+| JSON document reference | `Type=""`, no `Id` | `Id="id-doc-signed-data"`, no `Type` |
+
+**Why not change anything:** LHDN's own two samples contradict each other on that `Type` URI — their XML uses the xmldsig one, their JSON uses the ETSI one, which is also what the XAdES spec specifies and what we emit. Combined with the explicit "illustration purposes only" disclaimer, the samples are too loose to justify breaking byte-parity with goldens that match a reference implementation in real use. **The live validator is the only oracle that settles this**, and it needs the certificate. Re-open this question when a real submission is possible; if a document is rejected, this table is the first place to look.
 
 ## DOCUMENT TYPES — all eight, one envelope
 **MyInvois does not use UBL's per-document root elements.** Every document type rides the `Invoice` envelope and is distinguished *only* by `cbc:InvoiceTypeCode` (`01`-`04`, `11`-`14`). The reference makes this explicit:
