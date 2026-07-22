@@ -38,9 +38,7 @@ class AsyncDocumentTypesService:
             raise TypeError(f"Expected dict from API, got {type(raw).__name__}")
         return DocumentType.model_validate(raw)
 
-    async def get_version(
-        self, id_: int | str, version_id: int | str
-    ) -> DocumentTypeVersion:
+    async def get_version(self, id_: int | str, version_id: int | str) -> DocumentTypeVersion:
         raw = await self._client.request("GET", f"{self.BASE_PATH}/{id_}/versions/{version_id}")
         if not isinstance(raw, dict):
             raise TypeError(f"Expected dict from API, got {type(raw).__name__}")

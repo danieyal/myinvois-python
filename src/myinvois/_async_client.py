@@ -58,9 +58,7 @@ class AsyncMyInvoisClient:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._owns_client = http_client is None
-        self._http = (
-            http_client if http_client is not None else httpx.AsyncClient(timeout=30.0)
-        )
+        self._http = http_client if http_client is not None else httpx.AsyncClient(timeout=30.0)
         self._environment = environment
         self._base_api_url = base_api_url(environment)
         self._base_portal_url = base_portal_url(environment)

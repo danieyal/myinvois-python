@@ -10,7 +10,7 @@ license = "MIT"
 requires-python = ">=3.11"
 keywords = ["myinvois", "lhdn", "e-invoice", "malaysia", "ubl", "invoice"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -37,10 +37,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/myinvois"
-Documentation = "https://github.com/your-org/myinvois#readme"
-Repository = "https://github.com/your-org/myinvois"
-Issues = "https://github.com/your-org/myinvois/issues"
+Homepage = "https://github.com/danieyal/myinvois-python"
+Documentation = "https://github.com/danieyal/myinvois-python#readme"
+Repository = "https://github.com/danieyal/myinvois-python"
+Issues = "https://github.com/danieyal/myinvois-python/issues"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]

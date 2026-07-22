@@ -212,9 +212,7 @@ class GetSubmissionResponse(_Base):
     @model_validator(mode="after")
     def _require_uid_or_error(self) -> GetSubmissionResponse:
         if self.submission_uid is None and self.error is None:
-            raise ValueError(
-                "GetSubmissionResponse requires either submissionUid or error"
-            )
+            raise ValueError("GetSubmissionResponse requires either submissionUid or error")
         return self
 
 

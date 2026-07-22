@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Assert uv.lock is up to date with pyproject.toml and install exactly what
+  # it pins, rather than silently resolving something different from what
+  # developers run locally. (UV_LOCKED, not UV_FROZEN: --frozen skips
+  # re-locking without checking, --locked fails when the lock is stale.)
+  UV_LOCKED: "1"
+
+jobs:
+  lint:
+    name: Lint and type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+      - name: mypy
+        run: uv run mypy src/myinvois
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      # Live tests need real MyInvois sandbox credentials, so they are
+      # deselected here. They skip on their own if MYINVOIS_CLIENT_ID is
+      # unset, but deselecting keeps the CI summary honest about what ran.
+      - name: pytest
+        run: uv run pytest -m "not live"
+
+  package:
+    name: Build and verify distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      # Guards two things that are easy to break and painful to un-publish:
+      #   1. The PEP 561 marker and the JSON code tables must ship, or
+      #      `from myinvois.codes import ...` fails at runtime in a wheel
+      #      install and type-checkers ignore the package.
+      #   2. The test signing key/cert must NEVER ship. They are force-tracked
+      #      in git for the byte-parity tests (see tests/fixtures/cert/README.md)
+      #      which makes an accidental include plausible.
+      - name: Verify distribution contents
+        run: uv run --no-project python scripts/check_dist.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/

@@ -80,9 +80,7 @@ async def test_async_login_acquires_token(client: AsyncMyInvoisClient) -> None:
     assert client.access_token == "test-token"
 
 
-async def test_async_login_with_on_behalf_of(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_login_with_on_behalf_of(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     captured: dict[str, Any] = {}
 
     def _capture(request: httpx.Request) -> httpx.Response:
@@ -109,9 +107,7 @@ _SUBMISSION_BODY = {
 }
 
 
-async def test_async_submit_documents(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_submit_documents(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     captured: dict[str, Any] = {}
 
     def _capture(request: httpx.Request) -> httpx.Response:
@@ -138,9 +134,7 @@ async def test_async_submit_documents_empty_raises(client: AsyncMyInvoisClient) 
         await client.submissions.submit_documents([])
 
 
-async def test_async_get_submission(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_get_submission(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     body = {
         "submissionUid": "HJSD135P2S7D8IU",
         "documentCount": 1,
@@ -215,12 +209,8 @@ async def test_async_get_submission_rejects_empty() -> None:
 # ===== documents (cancel/reject) =====
 
 
-async def test_async_cancel_document(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
-    respx_mock.put(
-        f"{_API}/api/v1.0/documents/state/UUID-1/state"
-    ).mock(
+async def test_async_cancel_document(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
+    respx_mock.put(f"{_API}/api/v1.0/documents/state/UUID-1/state").mock(
         return_value=httpx.Response(200, json={"uuid": "UUID-1", "status": "Cancelled"})
     )
     resp = await client.documents.cancel_document("UUID-1", reason="wrong amount")
@@ -229,12 +219,8 @@ async def test_async_cancel_document(
     assert resp.status == "Cancelled"
 
 
-async def test_async_reject_document(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
-    respx_mock.put(
-        f"{_API}/api/v1.0/documents/state/UUID-2/state"
-    ).mock(
+async def test_async_reject_document(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
+    respx_mock.put(f"{_API}/api/v1.0/documents/state/UUID-2/state").mock(
         return_value=httpx.Response(
             200, json={"uuid": "UUID-2", "status": "Requested for Rejection"}
         )
@@ -269,9 +255,7 @@ async def test_async_set_document_state_raw_string(
 # ===== document types =====
 
 
-async def test_async_document_types_list(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_document_types_list(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     respx_mock.get(f"{_API}/api/v1.0/documenttypes").mock(
         return_value=httpx.Response(
             200,
@@ -290,9 +274,7 @@ async def test_async_document_types_list(
     assert types.result[0].name == "Invoice"
 
 
-async def test_async_document_types_get(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_document_types_get(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     respx_mock.get(f"{_API}/api/v1.0/documenttypes/1").mock(
         return_value=httpx.Response(
             200, json={"id": 1, "name": "Invoice", "description": "Invoice"}
@@ -305,9 +287,7 @@ async def test_async_document_types_get(
 # ===== notifications =====
 
 
-async def test_async_get_notifications(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_get_notifications(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     respx_mock.get(f"{_API}/api/v1.0/notifications/taxpayer").mock(
         return_value=httpx.Response(
             200,
@@ -325,9 +305,7 @@ async def test_async_get_notifications(
 # ===== taxpayer =====
 
 
-async def test_async_validate_tin_valid(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_validate_tin_valid(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     respx_mock.get(url__regex=r".*/taxpayer/validate/.*").mock(
         return_value=httpx.Response(200, json={})
     )
@@ -337,9 +315,7 @@ async def test_async_validate_tin_valid(
     assert ok is True
 
 
-async def test_async_search_tin(
-    client: AsyncMyInvoisClient, respx_mock: Any
-) -> None:
+async def test_async_search_tin(client: AsyncMyInvoisClient, respx_mock: Any) -> None:
     respx_mock.get(url__regex=r".*/taxpayer/search/tin.*").mock(
         return_value=httpx.Response(200, json={"result": [{"tin": "C123"}]})
     )
