@@ -116,6 +116,13 @@ def client() -> Iterator[MyInvoisClient]:
         client_secret=_CLIENT_SECRET,
         environment=Environment.SANDBOX,
     ) as c:
+        # These tests submit documents and validate real TINs. Targeting
+        # production would file live tax records. The environment is hardcoded
+        # above with no override path, and this keeps it that way if someone
+        # later makes it configurable.
+        assert "preprod" in c.base_api_url, (
+            f"live tests must run against preprod, got {c.base_api_url!r}"
+        )
         yield c
 
 
