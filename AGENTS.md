@@ -116,18 +116,19 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 4: digital signature (XmlSigner + JsonSigner, byte-for-byte PHP parity, commit `9ce6d48`, 232 tests)
 - [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `f4327a1`, 260 tests)
 - [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services, commit `80e7e2d` / PR #4, 284 tests)
-- [ ] Phase 6b: polish + publish (CI workflow, PyPI Trusted Publishing, live sandbox verification)
+- [~] Phase 6b: polish + publish — CI + packaging metadata DONE; PyPI Trusted Publishing, remaining 7 document types and live sandbox verification still TODO
 
 ## CURRENT_STATE
-Phases 0-6a done and committed. **284 tests passing** (up from 260). `ruff check`, `ruff format --check`, `mypy src` all clean. Working tree clean; HEAD is `80e7e2d` on `master`.
+Phases 0-6a done; Phase 6b partially done (CI + packaging). **284 tests passing** (up from 260). All four gates verified green *as of the Phase 6b commit* — `ruff check .`, `ruff format --check .`, `mypy src/myinvois`, `pytest -m "not live"`. The format gate only became green in that commit; see FORMATTING DRIFT.
 
 The full pipeline is implemented end-to-end and verified to run: build `Invoice` -> `JsonEnvelopeBuilder`/`XmlEnvelopeBuilder` -> `JsonSigner`/`XmlSigner` -> `build_submission_payload` -> `client.submissions.submit_documents`.
 
 Remaining before 1.0:
 
-- CI workflow + PyPI release automation (see GITHUB section).
+- PyPI release automation (CI itself is now in place — see GITHUB section).
 - Document types `02`/`03`/`04`/`11`-`14` (only `01` Invoice is modelled).
 - Live sandbox verification against LHDN preprod.
+- Async test coverage gap: token cache-hit / proactive refresh and HTTP-status -> exception mapping are sync-side only.
 
 ## CODE_STATE
 - `src/myinvois/codes/__init__.py` implements curated `StrEnum(_EnumLookupMixin)` tables + `_CodeTable` loader instances; `src/myinvois/codes/_data/*.json` 8 tables = 3,637 rows. Re-extract via `uv run python scripts/extract_codes.py`.
@@ -151,12 +152,20 @@ Phase 4 commit = `9ce6d48`. Phase 5 commit = `f4327a1`. Phase 6a commit = `80e7e
 Repo: **https://github.com/danieyal/myinvois-python** (public).
 Remote `origin` → `https://github.com/danieyal/myinvois-python.git`. Default branch is `master`. Topics: `myinvois`, `lhdn`, `e-invoice`, `malaysia`, `python`, `pydantic`, `ubl`, `xades`, `digital-signature`, `sdk`.
 
-CI (TODO when added): `.github/workflows/ci.yml` running `uv run ruff check . && uv run ruff format --check . && uv run mypy src/myinvois && uv run pytest`. Release automation (TODO): GitHub Actions Trusted Publishing → PyPI on tag `v*`.
+CI (DONE, Phase 6b): `.github/workflows/ci.yml`, three jobs — `lint` (ruff check + ruff format --check + mypy), `test` (pytest matrix 3.11/3.12/3.13, `-m "not live"`), `package` (uv build + `scripts/check_dist.py`, uploads the dists as an artifact). Runs on push-to-master, every PR, and `workflow_dispatch`. Workflow-level `permissions: contents: read` and `persist-credentials: false` on every checkout (least privilege; nothing in CI writes to the repo). `UV_LOCKED=1` so a stale `uv.lock` fails the build instead of silently resolving differently — **`UV_LOCKED`, not `UV_FROZEN`**: `--frozen` skips re-locking *without* checking, so it would not catch the drift.
+
+Release automation (TODO): GitHub Actions Trusted Publishing → PyPI on tag `v*`. Gate it on the `package` job. **Publishing under the `myinvois` name is outward-facing and irreversible per-version — confirm with the user before the first release.**
 
 Test-only signing fixtures `tests/fixtures/cert/dummy_signing_{cert,key}.pem` are intentionally force-tracked (see `tests/fixtures/cert/README.md`): the Phase 4 byte-parity tests pin against PHP-generated goldens that were signed with this exact self-signed dummy keypair.
 
 ## CHANGES
 - `pyproject.toml` has `[tool.uv.build-backend]` `data-includes` shipping `py.typed` + `_data/*.json` (PEP 561 marker). Codes symbols re-exported from top-level `myinvois/__init__.py`.
+- `scripts/check_dist.py` (Phase 6b) verifies a built sdist+wheel: the 9 required data members are present, and no `*.pem|key|p12|pfx` / `tests/` / `fixtures/` path ships. Negative-tested (tamper a wheel → both failure classes are caught). Run after `uv build` via `uv run --no-project python scripts/check_dist.py`.
+
+## FORMATTING DRIFT — resolved, and why CI exists
+Before Phase 6b, `ruff format --check .` **failed on 4 files** on `master`: `_async_client.py`, `services/async_document_types.py`, `services/models.py`, `tests/unit/test_async_client.py`. All four had been wrapped at ruff's default 88 columns instead of this project's configured `line-length = 100`, i.e. Phase 6a was committed without `ruff format` ever being run against the project config. The fix was pure line-rejoining (no semantic change) and is included in the Phase 6b CI commit.
+
+**Consequence for this file's own claims:** several CURRENT_STATE entries above asserted "`ruff check`, `ruff format --check`, `mypy src` all clean" while the format gate was in fact red. Do NOT copy a green-gates claim forward from a previous entry — re-run the four commands and report what they actually print.
 
 ## PENDING
 - [x] Phase 3b: UBL document models (Invoice-first)
@@ -165,7 +174,7 @@ Test-only signing fixtures `tests/fixtures/cert/dummy_signing_{cert,key}.pem` ar
 - [x] Phase 4: digital signature
 - [x] Phase 5: submit + state services
 - [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services)
-- [ ] Phase 6b: polish + publish (CI, PyPI, live sandbox verification, remaining 7 document types)
+- [~] Phase 6b: polish + publish — CI + packaging metadata DONE; PyPI Trusted Publishing, remaining 7 document types and live sandbox verification still TODO
 
 ## PHASE 4 — Digital signature (TDD, in flight)
 
@@ -595,9 +604,11 @@ for token cache-hit / proactive refresh (the `AsyncTokenManager` refresh-ahead
 path and its `asyncio.Lock` are untested), and no async test for HTTP-status ->
 exception mapping. Both are covered on the sync side only.
 
-## PHASE 6b — Polish + publish (TODO)
+## PHASE 6b — Polish + publish (partially DONE)
 
-1. **CI** — `.github/workflows/ci.yml`: `uv run ruff check . && uv run ruff format --check . && uv run mypy src/myinvois && uv run pytest`. Matrix over Python 3.11/3.12/3.13.
-2. **Release** — GitHub Actions Trusted Publishing to PyPI on tag `v*`. Confirm the wheel excludes `tests/fixtures/cert/*` (see `CERTIFY_BEFORE_PUBLIC` in the Phase 4 notes) and includes `py.typed` + `codes/_data/*.json`.
-3. **Remaining document types** — `02` Credit Note, `03` Debit Note, `04` Refund Note, `11`-`14` self-billed variants. Per the Phase 3b design decision these reuse the Invoice models; self-billed swaps supplier/customer roles via a single builder function. The envelope builders already dispatch on the document tag (`ENVELOPE_DOCUMENT_TAGS`), so the work is model-side plus new golden fixtures from the PHP SDK.
-4. **Live sandbox verification** — run the full build/sign/submit pipeline against `preprod-api.myinvois.hasil.gov.my` with a real LHDN cert. Everything so far is verified against PHP-SDK goldens, which is a proxy for (not proof of) LHDN validator acceptance.
+1. **CI** — **DONE.** `.github/workflows/ci.yml` with `lint` / `test` (3.11-3.13 matrix) / `package` jobs. See the GITHUB section. Adding it surfaced 4 pre-existing `ruff format` failures — see the FORMATTING DRIFT section.
+2. **Packaging metadata** — **DONE.** `pyproject.toml` `[project.urls]` had shipped placeholder `https://github.com/your-org/myinvois` URLs into the wheel METADATA; corrected to `danieyal/myinvois-python`. `Development Status` classifier bumped `3 - Alpha` -> `4 - Beta` to match the README.
+3. **`CERTIFY_BEFORE_PUBLIC` — RESOLVED.** Verified empirically: neither the wheel nor the sdist ships `tests/` or `tests/fixtures/cert/*`. The wheel carries only `myinvois/**` + `dist-info`; the sdist carries `PKG-INFO`, `README.md`, `pyproject.toml`, `src/`. `scripts/check_dist.py` now enforces this in CI, so the Phase 4 worry is closed rather than merely observed.
+4. **Release** — TODO. GitHub Actions Trusted Publishing to PyPI on tag `v*`, gated on the `package` job. **Outward-facing and irreversible per-version: confirm with the user before the first publish.**
+5. **Remaining document types** — TODO. `02` Credit Note, `03` Debit Note, `04` Refund Note, `11`-`14` self-billed variants. Per the Phase 3b design decision these reuse the Invoice models; self-billed swaps supplier/customer roles via a single builder function. The envelope builders already dispatch on the document tag (`ENVELOPE_DOCUMENT_TAGS`), so the work is model-side plus new golden fixtures from the PHP SDK.
+6. **Live sandbox verification** — TODO. Run the full build/sign/submit pipeline against `preprod-api.myinvois.hasil.gov.my` with a real LHDN cert. Everything so far is verified against PHP-SDK goldens, which is a proxy for (not proof of) LHDN validator acceptance.
