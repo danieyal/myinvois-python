@@ -179,6 +179,9 @@ def test_state_change_error_response_carries_error(client: MyInvoisClient, respx
     assert resp.status == "Valid"
     assert resp.error is not None
     assert resp.error.code == "OperationPeriodOver"
+    # `message` is Optional; asserting it first turns a missing message into a
+    # clear failure rather than a TypeError from `in` on None.
+    assert resp.error.message is not None
     assert "too late" in resp.error.message
 
 

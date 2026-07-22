@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -135,8 +136,12 @@ def _invoice_line() -> InvoiceLine:
     )
 
 
-def _invoice(**overrides: object) -> Invoice:
-    base: dict[str, object] = {
+def _invoice(**overrides: Any) -> Invoice:
+    # `Any`, not `object`: these values are splatted into `Invoice(**base)`,
+    # and `object` cannot be matched against each field's declared type, so a
+    # type checker reports one error per field. `Any` is also the honest
+    # annotation for a helper whose whole purpose is arbitrary overrides.
+    base: dict[str, Any] = {
         "id": "INV-0001",
         "issue_date_time": datetime(2024, 6, 14, 9, 30, 0, tzinfo=UTC),
         "invoice_type_code": DocumentTypeCode.INVOICE,
@@ -399,20 +404,26 @@ class TestValidation:
 class TestMoneyIsDecimal:
     def test_amounts_coerced_to_decimal(self) -> None:
         # Users may pass float; the model coerces to Decimal to keep money exact.
+        # The wrong static types below are the point of the test -- a caller who
+        # does this is exactly who the coercion protects -- so the suppressions
+        # are per-argument rather than blanket, keeping any *other* error on
+        # these lines visible.
         lmt = LegalMonetaryTotal(
-            tax_exclusive_amount=100.0,
-            tax_inclusive_amount=110.0,
-            payable_amount=110.0,
+            tax_exclusive_amount=100.0,  # pyright: ignore[reportArgumentType]
+            tax_inclusive_amount=110.0,  # pyright: ignore[reportArgumentType]
+            payable_amount=110.0,  # pyright: ignore[reportArgumentType]
         )
         assert isinstance(lmt.tax_exclusive_amount, Decimal)
         assert isinstance(lmt.tax_inclusive_amount, Decimal)
         assert isinstance(lmt.payable_amount, Decimal)
 
     def test_string_amounts_coerced_to_decimal(self) -> None:
+        # Deliberately wrong static types, as above: strings are what arrives
+        # from JSON payloads and spreadsheet imports, and must land as Decimal.
         lmt = LegalMonetaryTotal(
-            tax_exclusive_amount="100",
-            tax_inclusive_amount="110",
-            payable_amount="110",
+            tax_exclusive_amount="100",  # pyright: ignore[reportArgumentType]
+            tax_inclusive_amount="110",  # pyright: ignore[reportArgumentType]
+            payable_amount="110",  # pyright: ignore[reportArgumentType]
         )
         assert lmt.tax_exclusive_amount == Decimal("100")
         assert lmt.payable_amount == Decimal("110")
