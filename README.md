@@ -312,9 +312,20 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
   XAdES digest inputs) were derived from LHDN's documentation and frozen as
   golden fixtures. Those tests prove the output is *deterministic and
   unchanged*, not that LHDN's validator accepts it.
-- **Not yet verified against a live LHDN environment.** Submission against the
-  preprod sandbox with a real certificate is still outstanding. Treat acceptance
-  as unproven until then.
+
+- **Signing is verified against fixtures, not against LHDN.** The XAdES output
+  is pinned byte-for-byte against golden fixtures, and its structure matches
+  LHDN's own published signed sample. But no document has been signed with a
+  CA-issued certificate and accepted by LHDN's validator, because signing
+  requires a certificate from an approved Malaysian CA. **Producing a signature
+  LHDN accepts is therefore unproven.** If you are evaluating this library for
+  production use, this is the risk to weigh.
+
+- **What *has* been verified live:** authentication and the read-only endpoints,
+  against the preprod sandbox — token issuance, document-type listing and TIN
+  validation all round-trip and parse correctly. Submission has not been
+  exercised. See `tests/live/`.
+
 - Signing requires an LHDN-issued certificate; the SDK never reads credentials
   implicitly — you pass a `CertConfig` explicitly.
 
