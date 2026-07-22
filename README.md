@@ -327,8 +327,9 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
   validation all round-trip and parse correctly. Submission has not been
   exercised. See `tests/live/`.
 
-- Signing requires an LHDN-issued certificate; the SDK never reads credentials
-  implicitly — you pass a `CertConfig` explicitly.
+- Signing requires a certificate issued by an approved Malaysian CA — LHDN does
+  not issue them. The SDK never reads credentials implicitly; you pass a
+  `CertConfig` explicitly.
 
 ## Development
 

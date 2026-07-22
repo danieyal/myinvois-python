@@ -25,8 +25,9 @@ These credentials are test-only:
   use obvious.
 - The private key has no password, which would be unacceptable in production.
 
-For real MyInvois signing, supply your own LHDN-issued (or MALB2B MSS) cert
-through `myinvois.config.CertConfig` — never import from this directory.
+For real MyInvois signing, supply your own certificate from an approved
+Malaysian CA (LHDN does not issue them) through `myinvois.config.CertConfig` —
+never import from this directory.
 
 ## Regenerating (only if you intentionally rebuild the goldens)
 
