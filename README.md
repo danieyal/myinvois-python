@@ -209,10 +209,10 @@ note.invoice_type_code                 # -> DocumentTypeCode.CREDIT_NOTE
 every document type on the same `Invoice` envelope, distinguished *only* by
 that code — a credit note is byte-identical to an invoice apart from two
 characters. `Invoice` defaults the code to `01`, so building a credit note with
-`Invoice` and forgetting the field produces a valid, submittable document that
-claims to be an invoice. LHDN accepts it, and nothing in the payload reveals
-the mistake. The named classes make that unrepresentable: the code cannot be
-omitted, and passing a conflicting one raises.
+`Invoice` and forgetting the field produces a well-formed document that claims
+to be an invoice, with nothing in the payload to reveal the mistake. The named
+classes supply the right code for you, so omitting the field is safe, and
+passing a conflicting one raises.
 
 For self-billed documents the *buyer* issues the document. The classes do not
 transpose `accounting_supplier_party` and `accounting_customer_party` for you —
