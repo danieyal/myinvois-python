@@ -192,8 +192,5 @@ ELEMENT_PREFIXES: dict[str, str] = {
 # the empty default so `_key_to_tag()` no longer falls through to the
 # unprefixed branch (which would emit `<TaxExclusiveAmount>…` outside the
 # `cbc` namespace and break C14N byte-parity).
-for _extra_name in _EXTRA_CBC_KEYS:
-    ELEMENT_PREFIXES[_extra_name] = "cbc"
-for _extra_name in _EXTRA_CAC_KEYS:
-    ELEMENT_PREFIXES[_extra_name] = "cac"
-del _extra_name
+ELEMENT_PREFIXES.update(dict.fromkeys(_EXTRA_CBC_KEYS, "cbc"))
+ELEMENT_PREFIXES.update(dict.fromkeys(_EXTRA_CAC_KEYS, "cac"))
