@@ -8,6 +8,7 @@ so routes are wired into an active router for the duration of each test.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -65,7 +66,7 @@ def test_oauth2_token_rejects_missing_access() -> None:
 
 
 def test_token_manager_acquires_token(respx_mock: Any, token_url: str, mgr: TokenManager) -> None:
-    respx_mock.post(token_url).mock(
+    route = respx_mock.post(token_url).mock(
         return_value=httpx.Response(200, json=_token_response("TOK-1", expires_in=3600))
     )
 
@@ -73,6 +74,18 @@ def test_token_manager_acquires_token(respx_mock: Any, token_url: str, mgr: Toke
 
     assert tok.access_token == "TOK-1"
     assert mgr.is_valid is True
+
+    # Pin the outgoing form too. Nothing else asserts the grant payload, so a
+    # typo in `_build_form` (e.g. "client_credential") would otherwise pass
+    # every test and only fail against the real LHDN token endpoint.
+    # Mirrors `test_async_auth.py::test_async_token_manager_acquires_token`.
+    sent = parse_qs(route.calls.last.request.content.decode())
+    assert sent == {
+        "client_id": ["cid"],
+        "client_secret": ["csecret"],
+        "grant_type": ["client_credentials"],
+        "scope": ["InvoicingAPI"],
+    }
 
 
 def test_token_manager_caches_until_expiry(
