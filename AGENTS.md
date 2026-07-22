@@ -94,6 +94,8 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - Credentials/certs: file path + bytes + a `CertConfig` dataclass. NEVER hardcode or accept from repo context.
 - Tests mock HTTP with `respx`. Live tests are `@pytest.mark.live` and skip if `MYINVOIS_CLIENT_ID` is unset.
 - Do NOT push or PR unless the user explicitly asks.
+- **No PHP-SDK references in `src/`, `tests/` or `README.md`.** Established by commit `abff6ec` (PR #1). LHDN ships **no official SDK in any language**; `klsheng/myinvois-php-sdk` is another unofficial community project, so citing it in user-facing surfaces falsely implies an authoritative reference. Describe the *canonical LHDN wire form* instead ("golden fixture", "reference output", `format_canonical_json_amount`, `TestReferenceByteParity`). This file (AGENTS.md) is the deliberate exception — the reverse-engineering record below is load-bearing for regenerating the goldens and must keep the PHP specifics.
+- Byte-parity with the golden fixtures proves output **determinism**, NOT LHDN validator acceptance. Never state or imply otherwise in user-facing docs; acceptance stays unproven until the Phase 6b live-sandbox run.
 
 ## Progress
 - [x] Phase 0: scaffold
@@ -113,10 +115,19 @@ Steps (mirror PHP `AbstractDocumentBuilder::createSignature` exactly):
 - [x] Phase 3c (XML half): `XmlEnvelopeBuilder` — VERIFIED BYTE-FOR-BYTE PARITY with `klsheng/myinvois-php-sdk` `XmlDocumentBuilder::build()`. Implementation: lxml-built tree post-processed via `etree.tostring(method='c14n', exclusive=False, with_comments=False)` — inclusive C14N-1.0 (PHP's `DOMDocument::C14N()` default args), keeps all four xmlns declarations on root invoice element. Element namespace prefix mapping dispatched via auto-generated `src/myinvois/ubl/builders/_prefixes.py` (137 entries, scanned from PHP `XmlSchema::CBC|CAC|EXT . '<Name>'` occurrences + 10 manually-named dynamic-composition keys including the `LegalMonetaryTotal` amount keys and `InvoiceLine`/`InvoicedQuantity` from `$xmlTagName`/`$quantityLabel` interpolations). Number text format uses new `format_as_php_xml_token()` (2dp fixed, trailing zeros preserved — differs from `format_as_php_float_token()` which strips trailing zeros for JSON). Pinned by `TestPhpSdkByteParity::test_byte_for_byte_matches_php_sdk_reference_xml_output` against `tests/fixtures/golden_invoice_unsigned.xml` (5027 bytes, md5-diffed against PHP output at fixture-population).
 - [x] Phase 4: digital signature (XmlSigner + JsonSigner, byte-for-byte PHP parity, commit `9ce6d48`, 232 tests)
 - [x] Phase 5: submit + state services (SubmissionsService + document-state mutations, commit `f4327a1`, 260 tests)
-- [ ] Phase 6: async mirror + polish + publish
+- [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services, commit `80e7e2d` / PR #4, 284 tests)
+- [ ] Phase 6b: polish + publish (CI workflow, PyPI Trusted Publishing, live sandbox verification)
 
 ## CURRENT_STATE
-Phases 0-5 done and committed. 260 tests passing (up from 232). `ruff check`, `ruff format --check`, `mypy src` all clean. Working tree clean after Phase 5 commit `f4327a1` on `master`.
+Phases 0-6a done and committed. **284 tests passing** (up from 260). `ruff check`, `ruff format --check`, `mypy src` all clean. Working tree clean; HEAD is `80e7e2d` on `master`.
+
+The full pipeline is implemented end-to-end and verified to run: build `Invoice` -> `JsonEnvelopeBuilder`/`XmlEnvelopeBuilder` -> `JsonSigner`/`XmlSigner` -> `build_submission_payload` -> `client.submissions.submit_documents`.
+
+Remaining before 1.0:
+
+- CI workflow + PyPI release automation (see GITHUB section).
+- Document types `02`/`03`/`04`/`11`-`14` (only `01` Invoice is modelled).
+- Live sandbox verification against LHDN preprod.
 
 ## CODE_STATE
 - `src/myinvois/codes/__init__.py` implements curated `StrEnum(_EnumLookupMixin)` tables + `_CodeTable` loader instances; `src/myinvois/codes/_data/*.json` 8 tables = 3,637 rows. Re-extract via `uv run python scripts/extract_codes.py`.
@@ -126,12 +137,15 @@ Phases 0-5 done and committed. 260 tests passing (up from 232). `ruff check`, `r
 - `src/myinvois/services/documents.py` (Phase 5 EXTENDED) adds `DocumentStateChangeStatus` enum + `set_document_state()` / `cancel_document()` / `reject_document()` + `DocumentStateChangeResponse` re-export.
 - `src/myinvois/services/models.py` (Phase 5 EXTENDED) adds `LhdnError`, `AcceptedDocument`, `RejectedDocument`, `SubmitDocumentsResponse`, `DocumentSummaryTotals`, `DocumentSummary` (with `model_validator(mode="before")` that nests the four camelCase `total*` keys into a `totals` sub-object), `GetSubmissionResponse`, `DocumentStateChangeResponse`.
 - `src/myinvois/client.py` (Phase 5) adds the `submissions` lazy property exposing `SubmissionsService` (mirrors the existing `documents`/`taxpayer`/`notifications` patterns).
+- `src/myinvois/_async_client.py` + `_async_auth.py` (Phase 6a) NEW: `AsyncMyInvoisClient` / `AsyncTokenManager`, one-for-one mirrors of the sync pair on `httpx.AsyncClient`. Same constructor, same properties (`environment`, `base_api_url`, `base_portal_url`, `access_token`, `on_behalf_of`), same `generate_document_qr_code_url()`; I/O methods are coroutines and cleanup is `aclose()` / `async with`.
+- `src/myinvois/services/async_{document_types,documents,notifications,submissions,taxpayer}.py` (Phase 6a) NEW: async service mirrors. They reuse the **same** response models from `services/models.py` and the same enums/constants as the sync services — only the transport differs.
+- `src/myinvois/__init__.py` re-exports `AsyncMyInvoisClient` alongside `MyInvoisClient`.
 
 ## TESTS
-260 passing (232 from prior phases + 28 new Phase 5 tests: 16 in `tests/unit/test_submissions.py` + 12 in `tests/unit/test_document_state.py`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`.
+284 passing. 21 of them are the Phase 6a async suite in `tests/unit/test_async_client.py`; the rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token acquisition, the `onbehalfof` header, and `async with` cleanup.
 
 ## VERSION_CONTROL_STATUS
-Phase 4 commit = `9ce6d48` on `master`. Phase 5 commit = `f4327a1` on `master` (note: branch is `master` not `main`). 33 files tracked as of Phase 3a; Phase 4 + Phase 5 added more.
+Phase 4 commit = `9ce6d48`. Phase 5 commit = `f4327a1`. Phase 6a commit = `80e7e2d` (PR #4). All on `master` (note: branch is `master`, not `main`). 33 files tracked as of Phase 3a; Phases 4-6a added more.
 
 ## GITHUB
 Repo: **https://github.com/danieyal/myinvois-python** (public).
@@ -150,7 +164,8 @@ Test-only signing fixtures `tests/fixtures/cert/dummy_signing_{cert,key}.pem` ar
 - [x] Phase 3c (XML half): UBL XML envelope builder + canonicalisation prep — byte-for-byte parity with PHP SDK verified (md5sum match)
 - [x] Phase 4: digital signature
 - [x] Phase 5: submit + state services
-- [ ] Phase 6: async mirror + polish + publish
+- [x] Phase 6a: async mirror (`AsyncMyInvoisClient` + 5 async services)
+- [ ] Phase 6b: polish + publish (CI, PyPI, live sandbox verification, remaining 7 document types)
 
 ## PHASE 4 — Digital signature (TDD, in flight)
 
@@ -525,4 +540,64 @@ explicitly requested.
 - `DocumentSummary.totals` is the only place Pydantic-fan-out was needed: the four camelCase `total*` keys ride at the row's top level per the LHDN doc, but for ergonomics we group them under a `totals` block with `Decimal`-typed fields. A `@model_validator(mode="before")` reshapes the dict before field-validation runs.
 - `build_submission_payload` accepts both `bytes` and `str` content (str is UTF-8 encoded internally) — mirrors PHP `MyInvoisHelper::getInternalSubmitDocument` which dealt with strings throughout.
 - The SubmissionsService path constant is `{BASE_PATH}/` (with trailing slash) matching the LHDN doc's URL signature; tests must mock `_BASE + "/"` for POST.
-- Phase 5 deliberately does NOT yet include the QR-Code URL builder (`generateDocumentQrCodeUrl` in PHP); that lives in a future "polish" phase alongside any remaining read endpoints (the basic `getDocument` with `uuid`/metadata is already covered by Phase 2's `get_raw`/`get_details`).
+- Phase 5 deliberately did NOT include the QR-Code URL builder (`generateDocumentQrCodeUrl` in PHP); that was added post-Phase-5 and is now implemented as `generate_document_qr_code_url()` on both `MyInvoisClient` and `AsyncMyInvoisClient`.
+
+## PHASE 6a — Async mirror (DONE, commit `80e7e2d` / PR #4)
+
+`AsyncMyInvoisClient` is a **one-for-one mirror** of `MyInvoisClient`, not a
+re-design. Same constructor signature, same property names, same service
+attribute names, same exceptions, same response models. Only the transport and
+the I/O method colour differ.
+
+### Module layout (7 new files, ~800 LOC)
+
+| File | Role |
+|---|---|
+| `src/myinvois/_async_auth.py` | `AsyncTokenManager` — same caching + refresh-ahead logic as `TokenManager`; only `_acquire()` is async. Guards concurrent refresh with an `asyncio.Lock` (the sync version has no lock because it is not shared across threads by contract). |
+| `src/myinvois/_async_client.py` | `AsyncMyInvoisClient`. |
+| `src/myinvois/services/async_document_types.py` | `AsyncDocumentTypesService` |
+| `src/myinvois/services/async_documents.py` | `AsyncDocumentsService` (incl. the Phase 5 state mutations) |
+| `src/myinvois/services/async_notifications.py` | `AsyncNotificationsService` |
+| `src/myinvois/services/async_submissions.py` | `AsyncSubmissionsService` |
+| `src/myinvois/services/async_taxpayer.py` | `AsyncTaxpayerService` |
+
+### Sync/async differences (the complete list)
+
+- Constructor takes `http_client: httpx.AsyncClient | None` instead of `httpx.Client | None`.
+- `login()`, `request()` and every service call are coroutines.
+- Cleanup is `aclose()` / `async with`, not `close()` / `with`.
+- Everything else is shared or duplicated verbatim: `Environment` resolution,
+  the `onbehalfof` header, `error_for_status()` mapping, the
+  `_message_from_error_payload()` helper (imported from `client.py`, not
+  re-implemented), `generate_document_qr_code_url()`, all response models in
+  `services/models.py`, and all enums.
+
+### Deliberate non-DRY
+
+The async services duplicate the path-building and query-param logic of their
+sync twins rather than sharing a mixin. Rationale: the shared surface is a
+handful of f-strings and dict-builds; a mixin would have to be generic over
+sync/async return types, which either needs `typing.Protocol` gymnastics or
+loses `mypy --strict` precision. **If a service endpoint changes, both files
+must be edited.** The async test-suite mirrors the sync assertions specifically
+to catch drift.
+
+### Tests (21 in `tests/unit/test_async_client.py`)
+
+`respx` mocks the LHDN endpoints exactly as in the sync suite. Coverage:
+environment/URL resolution, QR-URL building, token acquisition, `onbehalfof`
+header propagation on login, each of the five services' happy paths and request
+shapes (incl. Decimal totals, the `error` block passthrough, the reason-length
+guard and raw-string state input), lazy-property caching, and `async with`.
+
+**Coverage gaps vs the sync suite** (worth closing in Phase 6b): no async test
+for token cache-hit / proactive refresh (the `AsyncTokenManager` refresh-ahead
+path and its `asyncio.Lock` are untested), and no async test for HTTP-status ->
+exception mapping. Both are covered on the sync side only.
+
+## PHASE 6b — Polish + publish (TODO)
+
+1. **CI** — `.github/workflows/ci.yml`: `uv run ruff check . && uv run ruff format --check . && uv run mypy src/myinvois && uv run pytest`. Matrix over Python 3.11/3.12/3.13.
+2. **Release** — GitHub Actions Trusted Publishing to PyPI on tag `v*`. Confirm the wheel excludes `tests/fixtures/cert/*` (see `CERTIFY_BEFORE_PUBLIC` in the Phase 4 notes) and includes `py.typed` + `codes/_data/*.json`.
+3. **Remaining document types** — `02` Credit Note, `03` Debit Note, `04` Refund Note, `11`-`14` self-billed variants. Per the Phase 3b design decision these reuse the Invoice models; self-billed swaps supplier/customer roles via a single builder function. The envelope builders already dispatch on the document tag (`ENVELOPE_DOCUMENT_TAGS`), so the work is model-side plus new golden fixtures from the PHP SDK.
+4. **Live sandbox verification** — run the full build/sign/submit pipeline against `preprod-api.myinvois.hasil.gov.my` with a real LHDN cert. Everything so far is verified against PHP-SDK goldens, which is a proxy for (not proof of) LHDN validator acceptance.
