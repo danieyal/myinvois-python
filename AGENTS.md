@@ -142,7 +142,7 @@ Remaining before 1.0:
 - `src/myinvois/__init__.py` re-exports `AsyncMyInvoisClient` alongside `MyInvoisClient`.
 
 ## TESTS
-284 passing. 21 of them are the Phase 6a async suite in `tests/unit/test_async_client.py`; the rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token caching/refresh, the `onbehalfof` header, error mapping, and `async with` cleanup.
+284 passing. 21 of them are the Phase 6a async suite in `tests/unit/test_async_client.py`; the rest are the 260 from Phases 0-5 plus a few added by the post-Phase-5 fix commits (`19b105f`, `103cd75`). Test fixtures annotated `Iterator[...]`. Tests use `respx` to mock LHDN endpoints; assertions check request URL/path, request body shape, response parsing into typed Pydantic models, pagination params, client-side reason-length guard (max 300 chars), and server-level error passthrough via `DocumentStateChangeResponse.error`. The async suite additionally pins token acquisition, the `onbehalfof` header, and `async with` cleanup.
 
 ## VERSION_CONTROL_STATUS
 Phase 4 commit = `9ce6d48`. Phase 5 commit = `f4327a1`. Phase 6a commit = `80e7e2d` (PR #4). All on `master` (note: branch is `master`, not `main`). 33 files tracked as of Phase 3a; Phases 4-6a added more.
@@ -540,7 +540,7 @@ explicitly requested.
 - `DocumentSummary.totals` is the only place Pydantic-fan-out was needed: the four camelCase `total*` keys ride at the row's top level per the LHDN doc, but for ergonomics we group them under a `totals` block with `Decimal`-typed fields. A `@model_validator(mode="before")` reshapes the dict before field-validation runs.
 - `build_submission_payload` accepts both `bytes` and `str` content (str is UTF-8 encoded internally) — mirrors PHP `MyInvoisHelper::getInternalSubmitDocument` which dealt with strings throughout.
 - The SubmissionsService path constant is `{BASE_PATH}/` (with trailing slash) matching the LHDN doc's URL signature; tests must mock `_BASE + "/"` for POST.
-- Phase 5 deliberately does NOT yet include the QR-Code URL builder (`generateDocumentQrCodeUrl` in PHP); that lives in a future "polish" phase alongside any remaining read endpoints (the basic `getDocument` with `uuid`/metadata is already covered by Phase 2's `get_raw`/`get_details`).
+- Phase 5 deliberately did NOT include the QR-Code URL builder (`generateDocumentQrCodeUrl` in PHP); that was added post-Phase-5 and is now implemented as `generate_document_qr_code_url()` on both `MyInvoisClient` and `AsyncMyInvoisClient`.
 
 ## PHASE 6a — Async mirror (DONE, commit `80e7e2d` / PR #4)
 

@@ -191,8 +191,9 @@ unsigned_xml = XmlEnvelopeBuilder(invoice).build_xml()     # str, C14N-canonical
 
 Both emit the canonical LHDN wire form (`_D`/`_A`/`_B`/`_E` namespace keys and
 array-of-one element wrapping for JSON; C14N-1.0 inclusive, no XML declaration
-and no inter-element whitespace for XML) so the signature digests computed over
-them round-trip through the LHDN validator unchanged.
+and no inter-element whitespace for XML) enabling deterministic, reproducible
+signature digest computation. Live validator acceptance remains unverified (see
+[Scope and limitations](#scope-and-limitations)).
 
 ### Sign (XAdES)
 
@@ -204,7 +205,7 @@ from myinvois.ubl.signing import JsonSigner, XmlSigner
 
 cert = CertConfig(
     private_key_path="/path/to/private_key.pem",
-    certificate_path="/path/to/certificate.pem",
+    certificate_path="/path/to/certificate.base64",  # raw base64-encoded DER, not PEM
 )
 
 signed_json = JsonSigner(cert).sign(unsigned_json, signing_time=datetime.now(UTC))  # str
@@ -269,10 +270,9 @@ MSIC.row_for("01111")["description"]                # -> "Growing of maize"
 - **The wire format is reverse-engineered.** LHDN publishes the API and UBL
   specifications but does not ship an official SDK in any language. The
   canonical byte-level details here (JSON envelope shape, XML canonicalisation,
-  XAdES digest inputs) were derived from LHDN's documentation cross-checked
-  against an existing community PHP implementation, then frozen as golden
-  fixtures. Those tests prove the output is *deterministic and unchanged*, not
-  that LHDN's validator accepts it.
+  XAdES digest inputs) were derived from LHDN's documentation and frozen as
+  golden fixtures. Those tests prove the output is *deterministic and
+  unchanged*, not that LHDN's validator accepts it.
 - **Not yet verified against a live LHDN environment.** Submission against the
   preprod sandbox with a real certificate is still outstanding. Treat acceptance
   as unproven until then.
