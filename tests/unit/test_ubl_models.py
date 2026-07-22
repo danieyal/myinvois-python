@@ -425,8 +425,17 @@ class TestMoneyIsDecimal:
             tax_inclusive_amount="110",  # pyright: ignore[reportArgumentType]
             payable_amount="110",  # pyright: ignore[reportArgumentType]
         )
-        assert lmt.tax_exclusive_amount == Decimal("100")
-        assert lmt.payable_amount == Decimal("110")
+        # Assert the type as well as the value, on every field. Value equality
+        # alone proves nothing here: `Decimal("110") == 110.0` is True, so a
+        # regression that left these as floats -- exactly the bug Decimal money
+        # exists to prevent -- would pass an equality-only check silently.
+        for amount, expected in (
+            (lmt.tax_exclusive_amount, Decimal("100")),
+            (lmt.tax_inclusive_amount, Decimal("110")),
+            (lmt.payable_amount, Decimal("110")),
+        ):
+            assert isinstance(amount, Decimal)
+            assert amount == expected
 
     def test_invoice_tax_amounts_decimal(self) -> None:
         inv = _invoice()
