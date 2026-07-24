@@ -75,16 +75,6 @@ class DocumentTypeList(_Base):
     result: list[DocumentType]
 
 
-# A small helper used by services to wrap raw dicts as models where the LHDN
-# response shape is a plain list (no `result` wrapper).
-def _as_items(raw: Any, *, model: type[BaseModel], key: str = "result") -> list[BaseModel]:
-    if isinstance(raw, dict) and key in raw and isinstance(raw[key], list):
-        return [model.model_validate(item) for item in raw[key]]
-    if isinstance(raw, list):
-        return [model.model_validate(item) for item in raw]
-    return []
-
-
 # ---------------------------------------------------------------------------
 # Phase 5 — Submit documents + Get submission response models
 # Spec: https://sdk.myinvois.hasil.gov.my/einvoicingapi/02-submit-documents/
