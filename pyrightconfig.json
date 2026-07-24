@@ -10,6 +10,32 @@
   // repeated here rather than silently dropped.
   "exclude": ["**/node_modules", "**/.*", "**/__pycache__", ".venv", "dist"],
   "pythonVersion": "3.11",
-  "typeCheckingMode": "standard",
-  "reportMissingTypeStubs": false
+
+  // Strict, minus the rules that are pure noise for this codebase's idioms.
+  // Each exception is a whole category we would otherwise suppress inline
+  // dozens of times, which hides real findings rather than surfacing them.
+  "typeCheckingMode": "strict",
+
+  "reportMissingTypeStubs": false,
+
+  // lxml-stubs and Pydantic's internals expose many values as Unknown. These
+  // fire ~90 times across the models and builders with nothing actionable
+  // behind them; turning them off keeps strict's genuine checks visible.
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownLambdaType": false,
+
+  // The UBL models share a deliberate cross-module internal API (`_leaf`,
+  // `_money`, `_UblModel`, `_Base`). That is by design, not a leak.
+  "reportPrivateUsage": false,
+
+  // Pydantic `mode="before"` validators genuinely receive `Any` at runtime,
+  // so the isinstance/type checks they perform are necessary, not redundant.
+  "reportUnnecessaryIsInstance": false,
+
+  // Requiring an explicit annotation on every test helper and lambda is noise
+  // for a test suite; src is covered by mypy --strict regardless.
+  "reportMissingParameterType": false
 }

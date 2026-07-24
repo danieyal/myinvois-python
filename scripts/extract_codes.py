@@ -10,13 +10,23 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import TypedDict
+
+
+class _TableSpec(TypedDict):
+    out: str
+    columns: list[tuple[str, str]]
+
 
 PHPSDK = Path("/tmp/phpsdk/src/Ubl/Constant")
 OUT = Path(__file__).resolve().parents[1] / "src" / "myinvois" / "codes" / "_data"
 OUT.mkdir(parents=True, exist_ok=True)
 
 # Map: PHP class => {output_filename, columns[(php_const, json_key)]}
-TABLES = {
+#: Per-table extraction spec. A TypedDict so ``spec["out"]`` types as ``str``
+#: and ``spec["columns"]`` as the column list, rather than unifying to a union
+#: that neither ``Path / spec["out"]`` nor the column loop can use.
+TABLES: dict[str, _TableSpec] = {
     "StateCodes": {
         "out": "states.json",
         "columns": [("CODE", "code"), ("STATE", "name")],
