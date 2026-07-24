@@ -5,6 +5,10 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+  # Lets the release workflow run this exact gate (lint + test matrix +
+  # package) before publishing, instead of duplicating it. workflow_call adds
+  # no automatic runs of its own.
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
