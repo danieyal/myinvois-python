@@ -92,12 +92,6 @@ class Price(_UblModel):
     def _to_decimal(cls, v: Any) -> Any:
         return _money(v)
 
-    @model_validator(mode="after")
-    def _must_have_price_amount(self) -> Price:
-        if self.price_amount is None:
-            raise ValueError("Price.price_amount is required")
-        return self
-
     @model_serializer
     def _ser(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -125,8 +119,8 @@ class ItemPriceExtension(_UblModel):
 
     @model_validator(mode="after")
     def _must_have_amount(self) -> ItemPriceExtension:
-        if self.amount is None:
-            raise ValueError("ItemPriceExtension.amount is required")
+        # `amount` is required and non-Optional; Pydantic rejects missing/None
+        # before this runs. The currency default below is the real work.
         if not self.amount_currency_id:
             # The wire form requires a currencyID attribute on every amount.
             # The serializer stamps the document currency if not set, but

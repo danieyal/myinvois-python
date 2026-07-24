@@ -45,12 +45,6 @@ class PartyTaxScheme(_UblModel):
     company_id: str | None = Field(default=None, serialization_alias="CompanyID")
     tax_scheme: TaxScheme = Field(serialization_alias="TaxScheme")
 
-    @model_validator(mode="after")
-    def _must_have_tax_scheme(self) -> PartyTaxScheme:
-        if self.tax_scheme is None:
-            raise ValueError("PartyTaxScheme.tax_scheme is required")
-        return self
-
     @model_serializer
     def _ser(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -145,14 +139,6 @@ class Party(_UblModel):
             raise ValueError(f"unknown MSIC code {code!r}; see myinvois.codes.MSIC.all_rows()")
         return (code, v[1])
 
-    @model_validator(mode="after")
-    def _requires_address_and_legal_entity(self) -> Party:
-        if self.postal_address is None:
-            raise ValueError("Party.postal_address is required")
-        if self.legal_entity is None:
-            raise ValueError("Party.legal_entity is required")
-        return self
-
     @model_serializer
     def _ser(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -211,12 +197,6 @@ class AccountingParty(_UblModel):
         default="CertEX", exclude=True, repr=False
     )
     party: Party = Field(serialization_alias="Party")
-
-    @model_validator(mode="after")
-    def _must_have_party(self) -> AccountingParty:
-        if self.party is None:
-            raise ValueError("AccountingParty.party is required")
-        return self
 
     @model_serializer
     def _ser(self) -> dict[str, Any]:
