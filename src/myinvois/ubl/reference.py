@@ -148,7 +148,9 @@ class OrderReference(_UblModel):
     @model_serializer
     def _ser(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
-        if self.id is not None:
+        # Statically always-true (id is required), but kept as a guard for
+        # models built via `model_construct()`, which bypasses validation.
+        if self.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
             out["ID"] = _leaf(self.id)
         if self.sales_order_id is not None:
             out["SalesOrderID"] = _leaf(self.sales_order_id)

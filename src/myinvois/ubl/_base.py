@@ -18,6 +18,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+# These are the module's internal API, imported by the sibling model modules
+# (address.py, party.py, tax.py, …) rather than used within this file. Naming
+# them in __all__ marks them as exported so a "used only via import" checker
+# does not read them as dead.
+__all__ = ["_UblModel", "_leaf", "_money"]
+
 
 class _UblModel(BaseModel):
     """Base for every UBL structural model.

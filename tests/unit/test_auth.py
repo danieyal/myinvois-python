@@ -56,7 +56,10 @@ def test_oauth2_token_from_response() -> None:
 
 
 def test_oauth2_token_defaults_scheme_to_bearer() -> None:
-    resp = {"access_token": "X", "expires_in": 60}  # no token_type
+    # Annotated `dict[str, object]`: an inferred `dict[str, str | int]` is not
+    # assignable to `from_response`'s `dict[str, object]` parameter, because
+    # dict value types are invariant.
+    resp: dict[str, object] = {"access_token": "X", "expires_in": 60}  # no token_type
     assert OAuth2Token.from_response(resp, fetched_at=0.0).token_type == "Bearer"
 
 

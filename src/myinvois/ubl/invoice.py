@@ -235,7 +235,11 @@ class Invoice(_UblModel):
             "IssueTime": _leaf(self.issue_date_time.strftime("%H:%M:%SZ")),
         }
 
-        if self.invoice_type_code is not None:
+        # Statically always-true (the field is required), but kept as a guard
+        # for models built via `model_construct()`, which bypasses validation
+        # and can leave a required field as None. Serializing such a model
+        # should skip the key, not raise.
+        if self.invoice_type_code is not None:  # pyright: ignore[reportUnnecessaryComparison]
             tc_val = (
                 self.invoice_type_code.value
                 if isinstance(self.invoice_type_code, DocumentTypeCode)
