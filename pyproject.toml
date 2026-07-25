@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Unofficial Python SDK for the Malaysian MyInvois (LHDN) e-Invoice system"
 readme = "README.md"
 authors = [
-    { name = "Latiff Danieyal", email = "danieyal123@gmail.com" }
+    { name = "Latiff Danieyal", email = "latiffdanieyal@gmail.com" }
 ]
 license = "MIT"
 requires-python = ">=3.11"
